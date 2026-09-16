@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# env — NEVER commit these
+.env
+.env.local
+.env*.local
+.env.production
+
+# desktop build artifacts
+*.exe
+*.o
+*.obj
+desktop/vendor/
+desktop/gcc-err.txt
+
+# logs
+*.log
+npm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# misc
+.vercel
+
+# local agent/tooling config (machine-specific paths; may contain keys)
+.claude/

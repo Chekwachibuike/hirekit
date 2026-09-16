@@ -1,0 +1,183 @@
+/* ═══════════════════════════════════════════════════════
+   HIREKIT DESIGN SYSTEM  —  theme-aware tokens (light + dark)
+   ═══════════════════════════════════════════════════════
+   The accent hues (violet / coral / teal / gold) are identical
+   across themes; only surfaces, borders, text, shadows and the
+   translucent *-dim / *-glow tints change. A blocking script in
+   layout.tsx stamps  data-theme="light|dark"  on <html> before
+   first paint, so there is no theme flash.
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Backgrounds / Surfaces ─────────────────────────── */
+  --c-bg:            #F3F4F6;   /* page                     */
+  --c-bg-2:          #FFFFFF;   /* surface / cards          */
+  --c-bg-3:          #FBFBFD;   /* raised panels            */
+  --c-bg-4:          #EDEEF2;   /* hover / active           */
+  --c-surface:       #FFFFFF;
+  --c-surface-2:     #FBFBFD;
+  --c-surface-hover: #F5F6F9;
+  --c-overlay:       rgba(17,24,39,0.42);   /* modal scrim  */
+
+  /* ── Borders ───────────────────────────────────────── */
+  --c-border:      rgba(17,24,39,0.09);
+  --c-border-md:   rgba(17,24,39,0.15);
+  --c-border-hot:  rgba(124,92,252,0.42);
+
+  /* ── Primary Accent — Violet ────────────────────────── */
+  --c-violet:      #7C5CFC;
+  --c-violet-dim:  rgba(124,92,252,0.10);
+  --c-violet-glow: rgba(124,92,252,0.16);
+  --c-violet-hot:  #9678FF;
+  --c-violet-deep: #5C3EE8;
+
+  /* ── Secondary — Coral ──────────────────────────────── */
+  --c-coral:       #F4633A;
+  --c-coral-dim:   rgba(244,99,58,0.11);
+
+  /* ── Tertiary — Teal ────────────────────────────────── */
+  --c-teal:        #00A885;
+  --c-teal-dim:    rgba(0,168,133,0.11);
+
+  /* ── Warm — Gold ────────────────────────────────────── */
+  --c-gold:        #D4A017;
+  --c-gold-dim:    rgba(212,160,23,0.12);
+
+  /* ── Status ─────────────────────────────────────────── */
+  --c-green:       #1FAF6E;
+  --c-red:         #E03255;
+  --c-amber:       #E09020;
+  --c-red-dim:     rgba(224,50,85,0.11);
+
+  /* ── Text ───────────────────────────────────────────── */
+  --c-text:        #101828;
+  --c-text-muted:  rgba(16,24,40,0.58);
+  --c-text-dim:    rgba(16,24,40,0.36);
+  --c-on-accent:   #FFFFFF;
+
+  /* ── Elevation ──────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(16,24,40,0.05);
+  --shadow-sm: 0 1px 2px rgba(16,24,40,0.04), 0 2px 6px rgba(16,24,40,0.06);
+  --shadow-md: 0 2px 4px rgba(16,24,40,0.04), 0 6px 16px rgba(16,24,40,0.08);
+  --shadow-lg: 0 6px 12px rgba(16,24,40,0.06), 0 16px 34px rgba(16,24,40,0.12);
+  --shadow-xl: 0 12px 24px rgba(16,24,40,0.10), 0 32px 60px rgba(16,24,40,0.16);
+  --shadow-accent: 0 8px 24px rgba(124,92,252,0.28);
+
+  /* ── Focus ring ─────────────────────────────────────── */
+  --ring: 0 0 0 3px var(--c-violet-glow);
+
+  /* ── Typography ─────────────────────────────────────── */
+  --font-display:  var(--font-space), 'DM Sans', sans-serif;
+  /* --font-body and --font-mono are defined by next/font in layout.tsx */
+
+  /* ── Layout ─────────────────────────────────────────── */
+  --sidebar-w:     244px;
+  --topbar-h:      60px;
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   14px;
+  --r-xl:   18px;
+  --r-2xl:  24px;
+
+  color-scheme: light;
+}
+
+/* ═══════════════════════════════════════════════════════
+   DARK THEME
+   ═══════════════════════════════════════════════════════ */
+:root[data-theme="dark"] {
+  --c-bg:            #0D0E12;
+  --c-bg-2:          #16171D;
+  --c-bg-3:          #1A1C23;
+  --c-bg-4:          #24262F;
+  --c-surface:       #16171D;
+  --c-surface-2:     #1A1C23;
+  --c-surface-hover: #21232B;
+  --c-overlay:       rgba(0,0,0,0.62);
+
+  --c-border:      rgba(255,255,255,0.08);
+  --c-border-md:   rgba(255,255,255,0.15);
+  --c-border-hot:  rgba(150,120,255,0.48);
+
+  --c-violet:      #9A80FF;
+  --c-violet-dim:  rgba(154,128,255,0.16);
+  --c-violet-glow: rgba(154,128,255,0.22);
+  --c-violet-hot:  #B2A0FF;
+  --c-violet-deep: #7C5CFC;
+
+  --c-coral:       #FF7A54;
+  --c-coral-dim:   rgba(255,122,84,0.16);
+
+  --c-teal:        #22C79E;
+  --c-teal-dim:    rgba(34,199,158,0.16);
+
+  --c-gold:        #E8B93A;
+  --c-gold-dim:    rgba(232,185,58,0.16);
+
+  --c-green:       #3ED08A;
+  --c-red:         #FF5C7C;
+  --c-amber:       #F0A83A;
+  --c-red-dim:     rgba(255,92,124,0.16);
+
+  --c-text:        #ECEDF1;
+  --c-text-muted:  rgba(236,237,241,0.60);
+  --c-text-dim:    rgba(236,237,241,0.36);
+  --c-on-accent:   #14151A;
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.40);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.44);
+  --shadow-md: 0 2px 4px rgba(0,0,0,0.40), 0 6px 18px rgba(0,0,0,0.50);
+  --shadow-lg: 0 6px 14px rgba(0,0,0,0.46), 0 18px 40px rgba(0,0,0,0.58);
+  --shadow-xl: 0 12px 28px rgba(0,0,0,0.55), 0 36px 70px rgba(0,0,0,0.65);
+  --shadow-accent: 0 8px 28px rgba(124,92,252,0.42);
+
+  color-scheme: dark;
+}
+
+/* ── Reset ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+html { transition: background-color 0.3s ease; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--c-border-md);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--c-text-dim); background-clip: padding-box; }
+
+::selection { background: var(--c-violet-glow); color: var(--c-text); }
+
+/* ── Keyframes ─────────────────────────────────────────── */
+@keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+@keyframes slideR   { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:translateX(0); } }
+@keyframes shimmer  { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+@keyframes spin     { to { transform:rotate(360deg); } }
+@keyframes pulse    { 0%,100% { box-shadow:0 0 0 0 rgba(124,92,252,0.28); } 50% { box-shadow:0 0 0 6px rgba(124,92,252,0); } }
+@keyframes gradMove { 0%,100% { background-position:0% 50%; } 50% { background-position:100% 50%; } }
+
+/* ── Utility ────────────────────────────────────────────── */
+.fade-up  { animation: fadeUp  0.4s cubic-bezier(0.22,1,0.36,1) forwards; }
+.fade-in  { animation: fadeIn  0.3s ease forwards; }
+.slide-r  { animation: slideR  0.3s ease forwards; }
+.skeleton {
+  background: linear-gradient(90deg, var(--c-bg-4) 25%, var(--c-surface-hover) 37%, var(--c-bg-4) 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--r-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

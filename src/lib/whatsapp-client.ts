@@ -1,0 +1,181 @@
+// Singleton WhatsApp client — persists across hot-reloads in dev via globalThis.
+// Only runs server-side (API routes). Never import in Client Components.
+
+export interface WaMessage {
+  id: string
+  from: string
+  body: string
+  timestamp: number
+  chatName: string
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var _waClient: import('whatsapp-web.js').Client | undefined
+  // eslint-disable-next-line no-var
+  var _waQr: string | undefined
+  // eslint-disable-next-line no-var
+  var _waReady: boolean
+  // eslint-disable-next-line no-var
+  var _waMessages: WaMessage[]
+  // eslint-disable-next-line no-var
+  var _waError: string | undefined
+}
+
+export function getWaStatus() {
+  return {
+    ready: globalThis._waReady ?? false,
+    qr: globalThis._waQr ?? null,
+    messageCount: (globalThis._waMessages ?? []).length,
+    error: globalThis._waError ?? null,
+  }
+}
+
+export function getWaMessages(): WaMessage[] {
+  return globalThis._waMessages ?? []
+}
+
+// puppeteer (a transitive dep of whatsapp-web.js) skips its own ~300MB
+// Chromium download (see .puppeteerrc.cjs) — reuse a browser already on the
+// machine instead. Add more candidate paths here if you're not on Windows.
+const BROWSER_CANDIDATES = [
+  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+]
+
+async function findSystemBrowser(): Promise<string | undefined> {
+  const { existsSync } = await import('fs')
+  return BROWSER_CANDIDATES.find(existsSync)
+}
+
+export async function initWaClient() {
+  if (globalThis._waClient) return
+
+  // Dynamic imports so Next.js doesn't bundle these at build time
+  const { Client, LocalAuth } = await import('whatsapp-web.js')
+  const executablePath = await findSystemBrowser()
+  if (!executablePath) {
+    globalThis._waError =
+      'No system browser found for WhatsApp automation. Install Microsoft Edge or Google Chrome, ' +
+      'or set skipDownload to false in .puppeteerrc.cjs and run npm install to fetch a private Chromium.'
+    throw new Error(globalThis._waError)
+  }
+
+  globalThis._waReady = false
+  globalThis._waQr = undefined
+  globalThis._waMessages = []
+  globalThis._waError = undefined
+
+  const client = new Client({
+    authStrategy: new LocalAuth({ clientId: 'hirekit' }),
+    puppeteer: {
+      headless: true,
+      executablePath,
+      // WhatsApp Web is heavy; on a memory-pressured machine it can exceed
+      // puppeteer's default 180s protocol timeout ("Runtime.callFunctionOn
+      // timed out"). Give it 5 minutes and trim browser overhead.
+      protocolTimeout: 300000,
+      args: [
+        '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+        '--disable-gpu', '--disable-extensions', '--mute-audio',
+        // Memory diet: don't render images at all (we only read message
+        // text), and cap the JS heap so WA Web's memory leaks can't grow
+        // unbounded. Together these cut the browser's footprint noticeably.
+        '--blink-settings=imagesEnabled=false',
+        '--js-flags=--max-old-space-size=256',
+      ],
+    },
+  })
+
+  // Block heavyweight network resources inside the WhatsApp browser.
+  // Message events arrive over the WebSocket, so aborting images, media,
+  // and fonts loses nothing we use — profile pictures and voice notes just
+  // never download. Standard practice for headless-browser automation.
+  let resourceBlockingAttached = false
+  async function attachResourceBlocking() {
+    if (resourceBlockingAttached) return
+    const page = client.pupPage
+    if (!page) return
+    resourceBlockingAttached = true
+    try {
+      await page.setRequestInterception(true)
+      page.on('request', req => {
+        const type = req.resourceType()
+        if (type === 'image' || type === 'media' || type === 'font') {
+          req.abort().catch(() => {})
+        } else {
+          req.continue().catch(() => {})
+        }
+      })
+    } catch (err) {
+      console.error('[whatsapp] resource blocking unavailable', err)
+    }
+  }
+
+  client.on('qr', (qr: string) => {
+    globalThis._waQr = qr
+    globalThis._waReady = false
+    globalThis._waError = undefined
+    attachResourceBlocking()
+  })
+
+  client.on('ready', () => {
+    globalThis._waReady = true
+    globalThis._waQr = undefined
+    console.log('[whatsapp] Client ready')
+    attachResourceBlocking()
+  })
+
+  client.on('message', async (msg: import('whatsapp-web.js').Message) => {
+    const chat = await msg.getChat()
+    const entry: WaMessage = {
+      id: msg.id._serialized,
+      from: msg.from,
+      body: msg.body,
+      timestamp: msg.timestamp,
+      chatName: chat.name || msg.from,
+    }
+    globalThis._waMessages = [entry, ...(globalThis._waMessages ?? [])].slice(0, 100)
+  })
+
+  client.on('disconnected', () => {
+    globalThis._waReady = false
+    globalThis._waClient = undefined
+    console.log('[whatsapp] Disconnected')
+  })
+
+  // Not awaited by design — initialize() resolves only once the QR is
+  // scanned and the session is ready, which would block the API route that
+  // calls initWaClient(). Must still catch rejections (e.g. Puppeteer/Chromium
+  // failing to launch) or they become an unhandled rejection that can crash
+  // the whole Next.js server process, not just this feature.
+  client.initialize().catch(async (err: unknown) => {
+    console.error('[whatsapp] initialize failed', err)
+    const msg = err instanceof Error ? err.message : String(err)
+    // Translate the common failure modes into something actionable
+    globalThis._waError = msg.includes('already running')
+      ? 'A previous WhatsApp browser session is still running in the background. ' +
+        'Close any leftover headless Edge processes (Task Manager → msedge.exe) or restart your PC, then Connect again.'
+      : msg.includes('timed out')
+      ? 'WhatsApp Web took too long to load (your machine may be low on memory). ' +
+        'Close some other apps or browser tabs and click Connect again.'
+      : `WhatsApp failed to start: ${msg}`
+    globalThis._waReady = false
+    globalThis._waClient = undefined
+    // Kill the half-started browser, or it keeps the session locked and the
+    // NEXT connect attempt fails with "browser is already running".
+    try { await client.destroy() } catch { /* browser may never have started */ }
+  })
+  globalThis._waClient = client
+}
+
+export async function disconnectWaClient() {
+  if (globalThis._waClient) {
+    await globalThis._waClient.destroy()
+    globalThis._waClient = undefined
+    globalThis._waReady = false
+    globalThis._waQr = undefined
+  }
+}

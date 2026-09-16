@@ -75,6 +75,14 @@ if (Test-Path (Join-Path $root ".env.local")) {
 if (Test-Path (Join-Path $root ".puppeteerrc.cjs")) {
   Copy-Item -Force (Join-Path $root ".puppeteerrc.cjs") (Join-Path $standalone ".puppeteerrc.cjs")
 }
+# Stamp the payload version so the updater can tell what this build is.
+# Without it the payload reads as v0 and every check looks like an update.
+$versionFile = Join-Path $desktop "VERSION"
+if (Test-Path $versionFile) {
+  $v = (Get-Content $versionFile -Raw).Trim()
+  Set-Content -Path (Join-Path $standalone ".hirekit-version") -Value $v -Encoding ascii -NoNewline
+  Write-Host "      payload version: v$v" -ForegroundColor DarkGray
+}
 
 # ── 4. Compile the C shell ───────────────────────────────────────
 Write-Host "[4/4] Compiling HireKit.exe (MinGW g++)..." -ForegroundColor Cyan
@@ -89,12 +97,14 @@ $out  = Join-Path $root "HireKit.exe"
 Push-Location $desktop
 gcc -c hirekit.c -o hirekit.o -O2 "-I$inc1" "-I$inc2"
 if (-not $?) { Pop-Location; throw "hirekit.c failed to compile" }
+gcc -c update.c -o update.o -O2 "-I$inc1" "-I$inc2"
+if (-not $?) { Pop-Location; throw "update.c failed to compile" }
 g++ -c webview_impl.cc -o webview_impl.o -O2 -std=c++14 "-I$inc1" "-I$inc2"
 if (-not $?) { Pop-Location; throw "webview_impl.cc failed to compile" }
-g++ hirekit.o webview_impl.o -o $out -O2 -static -mwindows `
-  -ladvapi32 -lole32 -lshell32 -lshlwapi -luser32 -lversion -lws2_32
+g++ hirekit.o webview_impl.o update.o -o $out -O2 -static -mwindows `
+  -ladvapi32 -lole32 -lshell32 -lshlwapi -luser32 -lversion -lws2_32 -lwinhttp -lbcrypt
 if (-not $?) { Pop-Location; throw "link failed" }
-Remove-Item hirekit.o, webview_impl.o -ErrorAction SilentlyContinue
+Remove-Item hirekit.o, webview_impl.o, update.o -ErrorAction SilentlyContinue
 Pop-Location
 
 $size = [math]::Round((Get-Item $out).Length / 1MB, 2)

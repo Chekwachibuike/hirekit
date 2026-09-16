@@ -36,3 +36,7 @@ Thumbs.db
 
 # local agent/tooling config (machine-specific paths; may contain keys)
 .claude/
+
+# release packaging output
+desktop/release/
+desktop/stage/

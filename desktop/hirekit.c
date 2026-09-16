@@ -34,6 +34,7 @@
 
 #define WEBVIEW_STATIC  /* link against webview_impl.cc, not header-only */
 #include "webview/webview.h"
+#include "update.h"
 
 /* ── Config ─────────────────────────────────────────────────────── */
 #define APP_TITLE     "HireKit"
@@ -231,6 +232,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
   char *slash = strrchr(exe_dir, '\\');
   if (slash) *slash = '\0';
 
+  /* Swap in any payload staged by the previous run. Local and offline --
+     safe at this point because the server has not been spawned yet, so
+     nothing inside the folder is running or locked. */
+  update_apply_staged(exe_dir);
+
   /* Decide how to get a HireKit server on our private port. */
   int spawned = 0;
   if (port_is_open(SERVER_PORT)) {
@@ -290,6 +296,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
   webview_set_title(w, APP_TITLE);
   webview_set_size(w, WIN_W, WIN_H, WEBVIEW_HINT_NONE);
   webview_navigate(w, APP_URL);
+
+  /* Window is up; now look for the next update. Runs on its own thread so a
+     slow or unreachable network never delays startup. Whatever it finds is
+     staged for the next launch, never applied under a running server. */
+  update_start_background(exe_dir);
   webview_run(w);      /* blocks until the window is closed */
   webview_destroy(w);
 

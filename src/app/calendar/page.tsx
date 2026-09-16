@@ -32,6 +32,23 @@ const TYPE_CONFIG = {
 type EventType = keyof typeof TYPE_CONFIG
 type View = 'month' | 'week'
 
+// Shape returned by /api/calendar/google/events
+interface GoogleFeedEvent {
+  googleId: string
+  title: string
+  date: string
+  time: string | null
+  notes: string | null
+  htmlLink: string | null
+}
+
+// A HireKit event, or one read from Google. `source` marks the latter: those
+// live only in Google, are not in our database, and cannot be edited here.
+type DisplayEvent = CalendarEvent & {
+  source?: 'google'
+  htmlLink?: string | null
+}
+
 const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const HOURS  = Array.from({ length: 16 }, (_, i) => i + 6) // 6am – 9pm
@@ -217,7 +234,7 @@ export default function CalendarPage() {
   // the real list arrived, then vanished — indistinguishable from real events
   // being lost. The "Loading events…" indicator already covers this window.
   const { data, isLoading: loading, mutate } = useSWR(CALENDAR_KEY, fetchCalendarEvents)
-  const events = data ?? []
+  const events = useMemo(() => data ?? [], [data])
 
   const year  = anchor.getFullYear()
   const month = anchor.getMonth()
@@ -236,6 +253,57 @@ export default function CalendarPage() {
   const { data: googleStatus, mutate: mutateGoogleStatus } =
     useSWR<{ connected: boolean }>(GOOGLE_STATUS_KEY, fetcher)
   const googleConnected = googleStatus?.connected ?? false
+
+  // Pull the user's EXISTING Google events for the visible month. Padded by a
+  // week each side so the grid's leading/trailing cells are covered too.
+  const [gFrom, gTo] = useMemo(() => {
+    const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+    const end   = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)
+    start.setDate(start.getDate() - 7)
+    end.setDate(end.getDate() + 7)
+    return [toISO(start), toISO(end)]
+  }, [anchor])
+
+  const { data: googleFeed } = useSWR<{ events: GoogleFeedEvent[]; error?: string }>(
+    googleConnected ? `/api/calendar/google/events?from=${gFrom}&to=${gTo}` : null,
+    fetcher,
+  )
+
+  // Events HireKit created were pushed to Google, so they come back in this
+  // feed as well — drop those by id or every synced event renders twice.
+  const googleOnly = useMemo<DisplayEvent[]>(() => {
+    const mine = new Set(events.map(e => e.google_event_id).filter(Boolean))
+    return (googleFeed?.events ?? [])
+      .filter(g => !mine.has(g.googleId))
+      .map(g => ({
+        id: `g:${g.googleId}`,
+        title: g.title,
+        type: 'other' as const,
+        date: g.date,
+        time: g.time ?? undefined,
+        notes: g.notes ?? undefined,
+        google_event_id: g.googleId,
+        created_at: '',
+        source: 'google' as const,
+        htmlLink: g.htmlLink,
+      }))
+  }, [events, googleFeed])
+
+  const allEvents = useMemo<DisplayEvent[]>(
+    () => [...events, ...googleOnly],
+    [events, googleOnly],
+  )
+
+  // Google events are read-only here — editing them would need write-back
+  // rules we do not have, so send the user to Google instead of a modal that
+  // cannot save.
+  const openEvent = useCallback((ev: DisplayEvent) => {
+    if (ev.source === 'google') {
+      if (ev.htmlLink) window.open(ev.htmlLink, '_blank', 'noopener,noreferrer')
+      return
+    }
+    setModal({ date: ev.date, event: ev })
+  }, [])
 
   // The connect/callback round-trip is a full-page redirect, not a SPA
   // action — read the result from the URL once, then strip it so a refresh
@@ -275,10 +343,10 @@ export default function CalendarPage() {
 
   // Events indexed by date
   const byDate = useMemo(() => {
-    const map: Record<string, CalendarEvent[]> = {}
-    events.forEach(e => { (map[e.date] ??= []).push(e) })
+    const map: Record<string, DisplayEvent[]> = {}
+    allEvents.forEach(e => { (map[e.date] ??= []).push(e) })
     return map
-  }, [events])
+  }, [allEvents])
 
   // Navigation
   function navMonth(dir: 1 | -1) {
@@ -350,8 +418,8 @@ export default function CalendarPage() {
   // Upcoming events (next 10)
   const todayISO = today()
   const upcoming = useMemo(() =>
-    events.filter(e => e.date >= todayISO).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8),
-  [events, todayISO])
+    allEvents.filter(e => e.date >= todayISO).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8),
+  [allEvents, todayISO])
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - var(--topbar-h))', overflow: 'hidden', background: 'var(--c-bg)' }}>
@@ -407,7 +475,7 @@ export default function CalendarPage() {
             const cfg = TYPE_CONFIG[e.type as EventType] ?? TYPE_CONFIG.other
             const d   = new Date(e.date + 'T00:00:00')
             return (
-              <button key={e.id} onClick={() => setModal({ date: e.date, event: e })} style={{
+              <button key={e.id} onClick={() => openEvent(e)} style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '7px 10px', borderRadius: 'var(--r-md)',
                 marginBottom: 4, cursor: 'pointer',
@@ -514,7 +582,7 @@ export default function CalendarPage() {
           }}>
             {googleError
               ? <><AlertCircle size={13} /> Couldn't connect Google Calendar ({googleError.replace(/_/g, ' ')}). Try again.</>
-              : <><Check size={13} /> Google Calendar connected — new events will sync automatically.</>}
+              : <><Check size={13} /> Google Calendar connected — your Google events show here (dashed, read-only), and events you create here sync to Google.</>}
           </div>
         )}
 
@@ -576,12 +644,18 @@ export default function CalendarPage() {
                         return (
                           <div
                             key={ev.id}
-                            onClick={e => { e.stopPropagation(); setModal({ date: ev.date, event: ev }) }}
+                            onClick={e => { e.stopPropagation(); openEvent(ev) }}
+                            title={ev.source === 'google' ? 'From Google Calendar — opens in Google' : undefined}
                             style={{
                               padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
                               background: cfg.bg, color: cfg.color,
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                               cursor: 'pointer',
+                              // Read-only Google events get a dashed edge, so it is
+                              // obvious which ones this app cannot edit.
+                              border: ev.source === 'google'
+                                ? '1px dashed color-mix(in srgb, currentColor 45%, transparent)'
+                                : '1px solid transparent',
                             }}
                           >
                             {ev.time && <span style={{ opacity: 0.7, marginRight: 4 }}>{ev.time.slice(0, 5)}</span>}
@@ -661,7 +735,7 @@ export default function CalendarPage() {
                           const cfg = TYPE_CONFIG[ev.type as EventType] ?? TYPE_CONFIG.other
                           return (
                             <div key={ev.id}
-                              onClick={e => { e.stopPropagation(); setModal({ date: ev.date, event: ev }) }}
+                              onClick={e => { e.stopPropagation(); openEvent(ev) }}
                               style={{
                                 padding: '3px 6px', borderRadius: 5, fontSize: 10, fontWeight: 600,
                                 background: cfg.bg, color: cfg.color, marginBottom: 2,

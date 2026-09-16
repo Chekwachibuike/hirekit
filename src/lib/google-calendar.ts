@@ -167,3 +167,61 @@ export async function deleteEventFromGoogle(
     if (status !== 404 && status !== 410) throw err
   }
 }
+
+// ── Reading back from Google ──────────────────────────────────────
+export interface GoogleEvent {
+  googleId: string
+  title: string
+  date: string          // YYYY-MM-DD
+  time: string | null   // HH:MM, null for all-day events
+  notes: string | null
+  htmlLink: string | null
+}
+
+/**
+ * Lists events from the user's calendar in a date window.
+ *
+ * singleEvents expands recurring series into individual instances, which is
+ * what a month grid needs — without it a weekly standup arrives once, carrying
+ * a recurrence rule we would have to expand ourselves.
+ */
+export async function listEventsFromGoogle(
+  client: InstanceType<typeof google.auth.OAuth2>,
+  calendarId: string,
+  timeMin: string,
+  timeMax: string
+): Promise<GoogleEvent[]> {
+  const calendar = google.calendar({ version: 'v3', auth: client })
+  const { data } = await calendar.events.list({
+    calendarId,
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 250,
+  })
+
+  const out: GoogleEvent[] = []
+  for (const e of data.items ?? []) {
+    if (!e.id || e.status === 'cancelled') continue
+
+    // Read the wall-clock parts straight out of the RFC3339 string rather than
+    // going through Date. Google already returns the event in its own timezone
+    // ("2026-09-17T10:00:00+01:00"), so slicing shows the time the user sees in
+    // Google; parsing to Date would re-render it in the SERVER's timezone,
+    // which is the machine's locally but UTC if this is ever hosted.
+    const dt = e.start?.dateTime
+    const allDay = e.start?.date
+    if (!dt && !allDay) continue
+
+    out.push({
+      googleId: e.id,
+      title: e.summary ?? '(untitled)',
+      date: dt ? dt.slice(0, 10) : allDay!,
+      time: dt ? dt.slice(11, 16) : null,
+      notes: e.description ?? null,
+      htmlLink: e.htmlLink ?? null,
+    })
+  }
+  return out
+}

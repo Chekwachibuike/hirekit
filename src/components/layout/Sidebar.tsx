@@ -82,6 +82,9 @@ export default function Sidebar() {
       position: 'fixed', left: 0, top: 'var(--topbar-h)', bottom: 0,
       width: 'var(--sidebar-w)',
       background: 'var(--c-chrome)',
+      // Outer top corner, mirroring the content panel's top-right. Slightly
+      // lighter than the header bar above it so the curve actually reads.
+      borderTopLeftRadius: 'var(--r-lg)',
       display: 'flex', flexDirection: 'column',
       zIndex: 50, padding: '0 0 14px',
       overflow: 'hidden',

@@ -93,20 +93,21 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
   return (
     <>
       <Header />
-      {/* Chrome-coloured, because this is what shows through the notch below. */}
-      <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)', background: 'var(--c-chrome)' }}>
+      {/* Painted in the header's colour, because this is what shows through
+          the corners the two panels below round away. */}
+      <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)', background: 'var(--c-chrome-bar)' }}>
         <Sidebar />
         <main style={{
           marginLeft: 'var(--sidebar-w)',
           flex: 1,
           minHeight: 'calc(100vh - var(--topbar-h))',
           background: 'var(--c-bg)',
-          // The one curve in the layout. Rounding the content panel's top-left
-          // leaves a concave notch in the surrounding chrome, which is the
-          // shape Shopify uses — the panel reads as set INTO the frame rather
-          // than as a bar with rounded ends. Convex corners on the header
-          // itself give the opposite, and wrong, impression.
-          borderTopLeftRadius: 'var(--r-lg)',
+          // The sidebar and the content are two panels tucked under a flush
+          // header, each rounding its OUTER top corner: sidebar top-left,
+          // content top-right. The header colour fills the small wedges left
+          // at those corners, so the header's underside appears to curve
+          // inward to meet them — the inverted outer curve.
+          borderTopRightRadius: 'var(--r-lg)',
         }}>
           {children}
         </main>

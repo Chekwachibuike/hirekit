@@ -62,10 +62,11 @@ export default function Header() {
     <header style={{
       position: 'fixed', top: 0, left: 0, right: 0,
       height: 'var(--topbar-h)',
-      // Square edges on purpose. The curve in this layout belongs at the
-      // interior corner where the chrome meets the content panel, not on the
-      // bar itself — see ShellWrapper.
-      background: 'var(--c-chrome)',
+      // Square and flush. The bar is its own band; the panels BELOW it carry
+      // the curves (sidebar top-left, content top-right), and this colour is
+      // what fills the corners they leave behind — which is what produces the
+      // inverted outer curve where the header meets them.
+      background: 'var(--c-chrome-bar)',
       display: 'flex', alignItems: 'center',
       padding: '0 18px',
       zIndex: 100, gap: 10,

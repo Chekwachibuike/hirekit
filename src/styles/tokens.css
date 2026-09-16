@@ -24,7 +24,8 @@
      constant and only the content panel follows the theme. Content
      colours are unreadable on it, so anything drawn on the chrome
      uses these rather than --c-text / --c-border.                  */
-  --c-chrome:        #1C1C1F;
+  --c-chrome-bar:    #121215;   /* header only — see below */
+  --c-chrome:        #1C1C1F;   /* sidebar panel            */
   --c-chrome-hover:  rgba(255,255,255,0.08);
   --c-chrome-active: rgba(255,255,255,0.13);
   --c-chrome-text:   rgba(255,255,255,0.95);
@@ -113,6 +114,7 @@
 
   /* Content goes darker than the chrome in this theme, so the frame
      reads as slightly lighter and the notch still separates. */
+  --c-chrome-bar:    #0A0B0E;
   --c-chrome:        #17181D;
 
   --c-border:      rgba(255,255,255,0.08);

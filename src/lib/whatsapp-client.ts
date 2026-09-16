@@ -20,6 +20,102 @@ declare global {
   var _waMessages: WaMessage[]
   // eslint-disable-next-line no-var
   var _waError: string | undefined
+  // eslint-disable-next-line no-var
+  var _waHooked: boolean | undefined
+}
+
+// LocalAuth stores its Chromium profile at <cwd>/.wwebjs_auth/session-<clientId>.
+// Derived from cwd rather than hardcoded because cwd differs between `next dev`
+// (project root) and the desktop build (.next/standalone).
+// path.join (not string concat) because the reaper matches this against the
+// browser's command line, which uses native backslashes on Windows.
+const WA_CLIENT_ID = 'hirekit'
+async function sessionDir() {
+  const path = await import('path')
+  return path.join(process.cwd(), '.wwebjs_auth', `session-${WA_CLIENT_ID}`)
+}
+
+// ── Stale-session reaper ──────────────────────────────────────────
+// Chromium refuses to open a profile that a live browser still holds, and it
+// is our GRANDchild (node -> chromium), so it only dies when something kills
+// the whole tree. The desktop shell's Job Object does that when the window
+// closes, but not when node itself crashes or is force-killed, and `npm run
+// dev` has no job object at all. Either way the browser survives holding the
+// profile, and every later Connect fails with "browser is already running".
+//
+// initWaClient() returns early when a client already exists, so by the time we
+// reach here this process has no live browser of its own: anything still
+// holding OUR profile path is stale by definition, and safe to terminate.
+// Matching on the profile path is what keeps this from touching the user's
+// real browser windows.
+const REAP_SCRIPT = `
+$p = $env:HK_WA_PROFILE
+$all = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -eq 'msedge.exe' -or $_.Name -eq 'chrome.exe' }
+$seed = $all | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($p) }
+if (-not $seed) { exit 0 }
+$ids = @{}
+function Walk($i) {
+  if ($ids.ContainsKey($i)) { return }
+  $ids[$i] = $true
+  $all | Where-Object { $_.ParentProcessId -eq $i } | ForEach-Object { Walk $_.ProcessId }
+}
+foreach ($s in $seed) { Walk $s.ProcessId }
+foreach ($i in $ids.Keys) { Stop-Process -Id $i -Force -ErrorAction SilentlyContinue }
+Write-Output $ids.Count
+`
+
+async function reapStaleSession(): Promise<void> {
+  const dir = await sessionDir()
+
+  if (process.platform === 'win32') {
+    try {
+      const { execFile } = await import('child_process')
+      const { promisify } = await import('util')
+      const run = promisify(execFile)
+      // -EncodedCommand (UTF-16LE base64) instead of -Command: PowerShell
+      // re-parses a -Command string, which mangles any quoting inside the
+      // script. Encoding hands it over verbatim.
+      const encoded = Buffer.from(REAP_SCRIPT, 'utf16le').toString('base64')
+      const { stdout } = await run(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+        { env: { ...process.env, HK_WA_PROFILE: dir }, timeout: 20000 },
+      )
+      const n = parseInt(stdout.trim(), 10)
+      if (n > 0) console.log(`[whatsapp] reaped ${n} leftover browser process(es)`)
+    } catch (err) {
+      // Best effort — if the reaper fails we still try to launch, and the
+      // user just gets the old error instead of a silent hang.
+      console.error('[whatsapp] stale-session reap failed', err)
+    }
+  }
+
+  // Chromium leaves these behind when it dies abruptly; a stale one makes the
+  // next launch think another instance owns the profile. Safe to remove now
+  // that no process is holding the directory.
+  try {
+    const { rm } = await import('fs/promises')
+    const path = await import('path')
+    for (const f of ['DevToolsActivePort', 'SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+      await rm(path.join(dir, f), { force: true })
+    }
+  } catch { /* profile may not exist yet on first connect */ }
+}
+
+// Destroy the client on normal shutdown so the browser goes with us. This is
+// tidiness, not the guarantee — 'exit' cannot await, and a force-kill runs no
+// handler at all. reapStaleSession() is what actually makes reconnect reliable.
+function registerShutdownHooks() {
+  if (globalThis._waHooked) return
+  globalThis._waHooked = true
+
+  const bye = async () => {
+    try { await globalThis._waClient?.destroy() } catch { /* already gone */ }
+  }
+  process.once('SIGINT', async () => { await bye(); process.exit(0) })
+  process.once('SIGTERM', async () => { await bye(); process.exit(0) })
+  process.once('beforeExit', bye)
 }
 
 export function getWaStatus() {
@@ -68,8 +164,13 @@ export async function initWaClient() {
   globalThis._waMessages = []
   globalThis._waError = undefined
 
+  // Clear anything still holding our profile from a previous run BEFORE we try
+  // to open it, so a crashed session can never block the next Connect.
+  await reapStaleSession()
+  registerShutdownHooks()
+
   const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'hirekit' }),
+    authStrategy: new LocalAuth({ clientId: WA_CLIENT_ID }),
     puppeteer: {
       headless: true,
       executablePath,
@@ -156,8 +257,9 @@ export async function initWaClient() {
     const msg = err instanceof Error ? err.message : String(err)
     // Translate the common failure modes into something actionable
     globalThis._waError = msg.includes('already running')
-      ? 'A previous WhatsApp browser session is still running in the background. ' +
-        'Close any leftover headless Edge processes (Task Manager → msedge.exe) or restart your PC, then Connect again.'
+      ? 'A leftover browser session is holding the WhatsApp profile and could not be ' +
+        'cleared automatically. Click Connect once more — if it still fails, the profile ' +
+        'may be owned by another user account on this PC.'
       : msg.includes('timed out')
       ? 'WhatsApp Web took too long to load (your machine may be low on memory). ' +
         'Close some other apps or browser tabs and click Connect again.'

@@ -148,7 +148,54 @@ meant every rebuild forced a fresh QR scan.
 
 ---
 
-## 7. Troubleshooting
+## 7. Connecting Google Calendar (one-time setup)
+
+Google only redirects back to URIs you have registered in advance, so the app
+cannot do this part for you.
+
+1. Open **https://console.cloud.google.com/apis/credentials**
+2. Check the project selector at the top — pick the project whose number is
+   **`542046335843`** (that's the prefix of your `GOOGLE_CLIENT_ID`)
+3. Under **OAuth 2.0 Client IDs**, click the client starting with
+   `542046335843-`
+4. Find **Authorized redirect URIs** → click **+ ADD URI** and paste these,
+   one per entry:
+
+   ```
+   http://127.0.0.1:39847/api/calendar/google/callback
+   http://localhost:3000/api/calendar/google/callback
+   ```
+
+5. Click **SAVE**, then wait a few minutes — Google takes a little while to
+   propagate the change
+
+Both URIs are needed because Google compares them as plain strings:
+`localhost` and `127.0.0.1` are different values, and the port must match
+exactly. The first is the desktop app, the second is `npm run dev`.
+
+### Two gotchas on the consent screen
+
+Open **APIs & Services → OAuth consent screen**:
+
+- **If Publishing status is "Testing"**, your own Google account must be listed
+  under **Test users**, or consent fails with `access_denied`.
+- **Testing mode also expires refresh tokens after 7 days**, so the calendar
+  silently disconnects roughly weekly. If you want it to stay connected, set
+  Publishing status to **In production**. Since `calendar.events` is a
+  sensitive scope you'll see an "unverified app" warning on the consent screen
+  — click *Advanced → Go to HireKit* to continue. Verification is only required
+  to serve other people at scale, not for your own account.
+
+### Checking it worked
+
+Click **Connect** on the Calendar page. You should land back on the calendar
+with `?google_connected=1` in the URL. If you get `redirect_uri_mismatch`,
+Google will name the URI it received — compare it character by character with
+what you registered.
+
+---
+
+## 8. Troubleshooting
 
 **"Server build not found"**
 The standalone build is missing — almost always because a plain `npm run dev`

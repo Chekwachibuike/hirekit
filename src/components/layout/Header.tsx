@@ -65,6 +65,12 @@ export default function Header() {
       position: 'fixed', top: 0, left: 0, right: 0,
       height: 'var(--topbar-h)',
       background: 'var(--c-surface)',
+      // Curve the bottom edge so the bar reads as a rounded surface laid over
+      // the app rather than a flat band across the top. The border and shadow
+      // trace the curve, which is what keeps it legible on the left where the
+      // sidebar behind it is the same colour as the bar itself.
+      borderBottomLeftRadius: 'var(--r-lg)',
+      borderBottomRightRadius: 'var(--r-lg)',
       borderBottom: '1px solid var(--c-border)',
       boxShadow: 'var(--shadow-xs)',
       display: 'flex', alignItems: 'center',
@@ -74,7 +80,7 @@ export default function Header() {
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginRight: 'auto', paddingLeft: 2 }}>
         <div style={{
-          width: 34, height: 34, borderRadius: 10,
+          width: 34, height: 34, borderRadius: 'var(--r-md)',
           background: 'linear-gradient(135deg, var(--c-violet) 0%, var(--c-coral) 100%)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: 'var(--shadow-accent)',

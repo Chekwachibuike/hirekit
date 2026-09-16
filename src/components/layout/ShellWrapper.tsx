@@ -93,22 +93,13 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
   return (
     <>
       <Header />
-      {/* The surface colour here is what shows through main's rounded corner,
-          so it matches the header and sidebar rather than leaking the body
-          background. */}
-      <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)', background: 'var(--c-surface)' }}>
+      <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)' }}>
         <Sidebar />
         <main style={{
           marginLeft: 'var(--sidebar-w)',
           flex: 1,
           minHeight: 'calc(100vh - var(--topbar-h))',
           background: 'var(--c-bg)',
-          // Shopify's signature move: the content area curves away from the
-          // chrome at the one corner where the sidebar and header meet, so it
-          // reads as a panel set into the frame instead of a flat region.
-          borderTopLeftRadius: 'var(--r-xl)',
-          borderLeft: '1px solid var(--c-border)',
-          borderTop: '1px solid var(--c-border)',
         }}>
           {children}
         </main>

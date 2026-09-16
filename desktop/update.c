@@ -32,9 +32,11 @@
 #define MAX_PAYLOAD   (512u * 1024u * 1024u)
 #define CHUNK         65536
 
-/* State that lives INSIDE the payload folder but must survive a swap:
-   secrets written by build.ps1, and the WhatsApp session (whatsapp-web.js
-   LocalAuth has no dataPath, so it lands in the server's cwd). */
+/* State that lives INSIDE the payload folder but must survive a swap: the
+   secrets build.ps1 copies in, which are deliberately absent from published
+   payloads. The WhatsApp session needed preserving too until it moved to
+   %LOCALAPPDATA%\HireKit, where no build or update can reach it; the entries
+   stay listed so a payload predating that move still upgrades cleanly. */
 static const char *PRESERVE[] = { ".env.local", ".wwebjs_auth", ".wwebjs_cache" };
 #define PRESERVE_N (sizeof(PRESERVE) / sizeof(PRESERVE[0]))
 

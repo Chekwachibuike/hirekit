@@ -27,12 +27,27 @@ declare global {
 // LocalAuth stores its Chromium profile at <cwd>/.wwebjs_auth/session-<clientId>.
 // Derived from cwd rather than hardcoded because cwd differs between `next dev`
 // (project root) and the desktop build (.next/standalone).
+// The session lives in LOCALAPPDATA, not under the app directory. LocalAuth's
+// default is <cwd>/.wwebjs_auth, and the desktop server's cwd is
+// .next\standalone -- which `next build` deletes and recreates, so every
+// rebuild silently logged the user out and demanded a fresh QR scan. A payload
+// update would have done the same. Keeping it in the user's own data directory
+// makes it survive builds, updates and reinstalls, and makes the path identical
+// in dev and in the desktop build instead of depending on cwd.
+//
 // path.join (not string concat) because the reaper matches this against the
 // browser's command line, which uses native backslashes on Windows.
 const WA_CLIENT_ID = 'hirekit'
+
+async function dataRoot() {
+  const path = await import('path')
+  const os = await import('os')
+  return path.join(process.env.LOCALAPPDATA || os.homedir(), 'HireKit', 'wwebjs')
+}
+
 async function sessionDir() {
   const path = await import('path')
-  return path.join(process.cwd(), '.wwebjs_auth', `session-${WA_CLIENT_ID}`)
+  return path.join(await dataRoot(), `session-${WA_CLIENT_ID}`)
 }
 
 // ── Stale-session reaper ──────────────────────────────────────────
@@ -170,7 +185,7 @@ export async function initWaClient() {
   registerShutdownHooks()
 
   const client = new Client({
-    authStrategy: new LocalAuth({ clientId: WA_CLIENT_ID }),
+    authStrategy: new LocalAuth({ clientId: WA_CLIENT_ID, dataPath: await dataRoot() }),
     puppeteer: {
       headless: true,
       executablePath,

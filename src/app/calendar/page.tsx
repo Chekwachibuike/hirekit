@@ -61,21 +61,6 @@ function buildWeekDays(anchor: Date): Date[] {
   })
 }
 
-// Mock events seeded relative to today
-function mockEvents(): CalendarEvent[] {
-  const t = new Date()
-  const fmt = (d: Date) => toISO(d)
-  const rel = (days: number) => { const d = new Date(t); d.setDate(t.getDate() + days); return fmt(d) }
-  return [
-    { id: 'm1', title: 'Andela Tech Interview', type: 'interview', date: rel(2), time: '10:00', notes: 'System design round', created_at: '' },
-    { id: 'm2', title: 'Flutterwave CV Deadline', type: 'deadline', date: rel(4), time: '23:59', notes: '', created_at: '' },
-    { id: 'm3', title: 'DSA Study Session', type: 'study', date: rel(1), time: '14:00', notes: 'Focus on graphs + DP', created_at: '' },
-    { id: 'm4', title: 'Paystack Follow-up', type: 'follow_up', date: rel(6), notes: '', created_at: '' },
-    { id: 'm5', title: 'Stripe Final Round', type: 'interview', date: rel(9), time: '15:00', notes: '', created_at: '' },
-    { id: 'm6', title: 'Portfolio Review', type: 'other', date: fmt(t), time: '11:00', notes: '', created_at: '' },
-  ]
-}
-
 // ── Event Modal ───────────────────────────────────────────────
 function EventModal({
   initial, onClose, onSave, onDelete, saving, deleting,
@@ -224,14 +209,15 @@ export default function CalendarPage() {
   const [miniSel, setMiniSel]         = useState(today())
   const [disconnecting, setDisconnecting] = useState(false)
 
-  // mockEvents() is only a placeholder shown before the real list has ever
-  // loaded — computed once so it doesn't generate a new array every render.
-  const mockFallback = useMemo(() => mockEvents(), [])
-
   // Cached under CALENDAR_KEY — revisiting this page shows the last list
   // instantly while a background refetch keeps it current.
-  const { data: events = mockFallback, isLoading: loading, mutate } =
-    useSWR(CALENDAR_KEY, fetchCalendarEvents)
+  //
+  // Start empty, never with placeholder events. Defaulting to mock data meant
+  // six invented interviews and deadlines rendered for the split second before
+  // the real list arrived, then vanished — indistinguishable from real events
+  // being lost. The "Loading events…" indicator already covers this window.
+  const { data, isLoading: loading, mutate } = useSWR(CALENDAR_KEY, fetchCalendarEvents)
+  const events = data ?? []
 
   const year  = anchor.getFullYear()
   const month = anchor.getMonth()

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseRouteHandlerClient } from '@/lib/supabase-server'
-import { exchangeCodeForTokens } from '@/lib/google-calendar'
+import { exchangeCodeForTokens, originFromRequest } from '@/lib/google-calendar'
 
 export const runtime = 'nodejs'
 
@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
   if (!state || state !== expectedState) return redirectTo('?google_error=state_mismatch')
 
   try {
-    const tokens = await exchangeCodeForTokens(code)
+    // Must be the identical origin the connect route used — Google rejects the
+    // exchange if the redirect_uri differs from the auth request by a byte.
+    const tokens = await exchangeCodeForTokens(code, originFromRequest(req))
     const { error } = await supabase.from('google_calendar_tokens').upsert(
       { user_id: user.id, ...tokens },
       { onConflict: 'user_id' }

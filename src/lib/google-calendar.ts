@@ -5,22 +5,43 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
-function redirectUri() {
-  return `${process.env.NEXT_PUBLIC_APP_URL}/api/calendar/google/callback`
+// The redirect URI is derived from the request that starts the flow, not from
+// NEXT_PUBLIC_APP_URL. That env var says localhost:3000, but the desktop build
+// serves on 127.0.0.1:39847 — so Google was sending people back to a port
+// nothing was listening on, which is why consent never returned and the
+// connection never completed.
+//
+// Google requires the redirect_uri on the token exchange to match the one on
+// the auth request byte for byte, so both paths must derive it the same way.
+// It also treats "localhost" and "127.0.0.1" as different strings: register
+// BOTH of these in Google Cloud Console → Credentials → Authorized redirect URIs:
+//   http://127.0.0.1:39847/api/calendar/google/callback   (desktop app)
+//   http://localhost:3000/api/calendar/google/callback    (npm run dev)
+export function originFromRequest(req: Request): string {
+  const host = req.headers.get('host')
+  if (!host) return process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:39847'
+  const isLoopback = host.startsWith('localhost') || host.startsWith('127.0.0.1')
+  const proto = req.headers.get('x-forwarded-proto') ?? (isLoopback ? 'http' : 'https')
+  return `${proto}://${host}`
 }
 
-export function getOAuthClient() {
+function redirectUri(origin?: string) {
+  const base = origin ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://127.0.0.1:39847'
+  return `${base}/api/calendar/google/callback`
+}
+
+export function getOAuthClient(origin?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri()
+    redirectUri(origin)
   )
 }
 
 // prompt: 'consent' forces Google to re-issue a refresh_token even if the
 // user connected before — without it, Google only sends one on first consent.
-export function getAuthUrl(state: string) {
-  return getOAuthClient().generateAuthUrl({
+export function getAuthUrl(state: string, origin?: string) {
+  return getOAuthClient(origin).generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: SCOPES,
@@ -28,8 +49,8 @@ export function getAuthUrl(state: string) {
   })
 }
 
-export async function exchangeCodeForTokens(code: string) {
-  const client = getOAuthClient()
+export async function exchangeCodeForTokens(code: string, origin?: string) {
+  const client = getOAuthClient(origin)
   const { tokens } = await client.getToken(code)
   if (!tokens.refresh_token || !tokens.access_token || !tokens.expiry_date) {
     throw new Error('Google did not return a refresh token — try disconnecting and reconnecting with prompt=consent')

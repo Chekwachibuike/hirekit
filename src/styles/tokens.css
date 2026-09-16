@@ -73,11 +73,14 @@
   /* ── Layout ─────────────────────────────────────────── */
   --sidebar-w:     244px;
   --topbar-h:      60px;
-  --r-sm:   6px;
-  --r-md:   10px;
-  --r-lg:   14px;
-  --r-xl:   18px;
-  --r-2xl:  24px;
+  /* Softer, Shopify-style scale. Every surface reads from these tokens
+     (--r-md alone is used in ~100 places), so the whole app moves together
+     rather than drifting into a mix of radii. */
+  --r-sm:   8px;
+  --r-md:   12px;
+  --r-lg:   16px;
+  --r-xl:   20px;
+  --r-2xl:  28px;
 
   color-scheme: light;
 }

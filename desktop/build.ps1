@@ -43,6 +43,17 @@ if (-not (Test-Path (Join-Path $sdkDir "build\native\include"))) {
 
 # ── 2. Next.js standalone build ──────────────────────────────────
 if (-not $SkipNext) {
+  # Type-check in its own process. next.config.js turns off the build's own
+  # type-checking because sharing a heap with the compilation graph ran the
+  # build out of memory; doing it here keeps type errors blocking without
+  # that cost. Its memory is released before the build starts.
+  Write-Host "[2/4] Type-checking..." -ForegroundColor Cyan
+  Push-Location $root
+  npx tsc --noEmit
+  $typesOk = $?
+  Pop-Location
+  if (-not $typesOk) { throw "type-check failed - fix the errors above, or run 'npx tsc --noEmit' to see them" }
+
   Write-Host "[2/4] Building Next.js (standalone)..." -ForegroundColor Cyan
   Push-Location $root
   $env:DESKTOP_BUILD = "1"

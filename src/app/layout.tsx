@@ -54,7 +54,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      {/* Chrome-coloured so no white leaks at the window edges behind the frame. */}
+      <body style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--c-chrome)' }}>
         <ShellWrapper>{children}</ShellWrapper>
       </body>
     </html>

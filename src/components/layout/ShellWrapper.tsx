@@ -93,13 +93,20 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
   return (
     <>
       <Header />
-      <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)' }}>
+      {/* Chrome-coloured, because this is what shows through the notch below. */}
+      <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)', background: 'var(--c-chrome)' }}>
         <Sidebar />
         <main style={{
           marginLeft: 'var(--sidebar-w)',
           flex: 1,
           minHeight: 'calc(100vh - var(--topbar-h))',
           background: 'var(--c-bg)',
+          // The one curve in the layout. Rounding the content panel's top-left
+          // leaves a concave notch in the surrounding chrome, which is the
+          // shape Shopify uses — the panel reads as set INTO the frame rather
+          // than as a bar with rounded ends. Convex corners on the header
+          // itself give the opposite, and wrong, impression.
+          borderTopLeftRadius: 'var(--r-lg)',
         }}>
           {children}
         </main>

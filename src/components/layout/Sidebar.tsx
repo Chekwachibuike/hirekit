@@ -34,21 +34,21 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
       display: 'flex', alignItems: 'center', gap: 11,
       padding: '9px 12px 9px 14px', borderRadius: 'var(--r-md)',
       textDecoration: 'none',
-      background: active ? 'var(--c-violet-dim)' : 'transparent',
-      color: active ? 'var(--c-violet)' : 'var(--c-text-muted)',
+      background: active ? 'var(--c-chrome-active)' : 'transparent',
+      color: active ? 'var(--c-chrome-text)' : 'var(--c-chrome-muted)',
       fontSize: 13.5, fontWeight: active ? 600 : 500,
       transition: 'background 0.15s, color 0.15s',
     }}
       onMouseEnter={(e) => {
         if (!active) {
-          e.currentTarget.style.background = 'var(--c-bg-4)'
-          e.currentTarget.style.color = 'var(--c-text)'
+          e.currentTarget.style.background = 'var(--c-chrome-hover)'
+          e.currentTarget.style.color = 'var(--c-chrome-text)'
         }
       }}
       onMouseLeave={(e) => {
         if (!active) {
           e.currentTarget.style.background = 'transparent'
-          e.currentTarget.style.color = 'var(--c-text-muted)'
+          e.currentTarget.style.color = 'var(--c-chrome-muted)'
         }
       }}
     >
@@ -67,7 +67,7 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
 function SectionLabel({ label }: { label: string }) {
   return (
     <div style={{
-      fontSize: 10.5, fontWeight: 700, color: 'var(--c-text-dim)',
+      fontSize: 10.5, fontWeight: 700, color: 'var(--c-chrome-dim)',
       letterSpacing: '0.1em', textTransform: 'uppercase',
       padding: '16px 12px 6px',
     }}>
@@ -81,8 +81,7 @@ export default function Sidebar() {
     <aside style={{
       position: 'fixed', left: 0, top: 'var(--topbar-h)', bottom: 0,
       width: 'var(--sidebar-w)',
-      background: 'var(--c-surface)',
-      borderRight: '1px solid var(--c-border)',
+      background: 'var(--c-chrome)',
       display: 'flex', flexDirection: 'column',
       zIndex: 50, padding: '0 0 14px',
       overflow: 'hidden',

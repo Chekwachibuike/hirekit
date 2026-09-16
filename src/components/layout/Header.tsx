@@ -16,20 +16,18 @@ function IconButton({ label, onClick, title, children }: {
       title={title}
       style={{
         width: 36, height: 36, borderRadius: 'var(--r-md)',
-        background: 'transparent', border: '1px solid var(--c-border)',
+        background: 'transparent', border: '1px solid var(--c-chrome-border)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer', color: 'var(--c-text-muted)',
+        cursor: 'pointer', color: 'var(--c-chrome-muted)',
         transition: 'all 0.15s', position: 'relative',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'var(--c-bg-4)'
-        e.currentTarget.style.color = 'var(--c-text)'
-        e.currentTarget.style.borderColor = 'var(--c-border-md)'
+        e.currentTarget.style.background = 'var(--c-chrome-hover)'
+        e.currentTarget.style.color = 'var(--c-chrome-text)'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = 'transparent'
-        e.currentTarget.style.color = 'var(--c-text-muted)'
-        e.currentTarget.style.borderColor = 'var(--c-border)'
+        e.currentTarget.style.color = 'var(--c-chrome-muted)'
       }}
     >
       {children}
@@ -64,15 +62,10 @@ export default function Header() {
     <header style={{
       position: 'fixed', top: 0, left: 0, right: 0,
       height: 'var(--topbar-h)',
-      background: 'var(--c-surface)',
-      // Curve the bottom edge so the bar reads as a rounded surface laid over
-      // the app rather than a flat band across the top. The border and shadow
-      // trace the curve, which is what keeps it legible on the left where the
-      // sidebar behind it is the same colour as the bar itself.
-      borderBottomLeftRadius: 'var(--r-lg)',
-      borderBottomRightRadius: 'var(--r-lg)',
-      borderBottom: '1px solid var(--c-border)',
-      boxShadow: 'var(--shadow-xs)',
+      // Square edges on purpose. The curve in this layout belongs at the
+      // interior corner where the chrome meets the content panel, not on the
+      // bar itself — see ShellWrapper.
+      background: 'var(--c-chrome)',
       display: 'flex', alignItems: 'center',
       padding: '0 18px',
       zIndex: 100, gap: 10,
@@ -88,8 +81,8 @@ export default function Header() {
           <Sparkles size={16} color="#fff" fill="#fff" strokeWidth={2} />
         </div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.03em', lineHeight: 1, fontFamily: 'var(--font-display)' }}>HireKit</div>
-          <div style={{ fontSize: 10, color: 'var(--c-text-dim)', letterSpacing: '0.06em', marginTop: 1 }}>JOB SUITE</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-chrome-text)', letterSpacing: '-0.03em', lineHeight: 1, fontFamily: 'var(--font-display)' }}>HireKit</div>
+          <div style={{ fontSize: 10, color: 'var(--c-chrome-dim)', letterSpacing: '0.06em', marginTop: 1 }}>JOB SUITE</div>
         </div>
       </div>
 
@@ -104,11 +97,11 @@ export default function Header() {
         <span style={{
           position: 'absolute', top: 8, right: 8,
           width: 6, height: 6, borderRadius: '50%',
-          background: 'var(--c-coral)', border: '1.5px solid var(--c-surface)',
+          background: 'var(--c-coral)', border: '1.5px solid var(--c-chrome)',
         }} />
       </IconButton>
 
-      <div style={{ width: 1, height: 22, background: 'var(--c-border)', margin: '0 3px' }} />
+      <div style={{ width: 1, height: 22, background: 'var(--c-chrome-border)', margin: '0 3px' }} />
 
       {/* Avatar */}
       <div style={{

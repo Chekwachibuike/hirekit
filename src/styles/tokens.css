@@ -19,6 +19,19 @@
   --c-surface-hover: #F5F6F9;
   --c-overlay:       rgba(17,24,39,0.42);   /* modal scrim  */
 
+  /* ── Chrome (header + sidebar) ───────────────────────
+     Dark in BOTH themes, the way Shopify does it: the frame stays
+     constant and only the content panel follows the theme. Content
+     colours are unreadable on it, so anything drawn on the chrome
+     uses these rather than --c-text / --c-border.                  */
+  --c-chrome:        #1C1C1F;
+  --c-chrome-hover:  rgba(255,255,255,0.08);
+  --c-chrome-active: rgba(255,255,255,0.13);
+  --c-chrome-text:   rgba(255,255,255,0.95);
+  --c-chrome-muted:  rgba(255,255,255,0.60);
+  --c-chrome-dim:    rgba(255,255,255,0.38);
+  --c-chrome-border: rgba(255,255,255,0.10);
+
   /* ── Borders ───────────────────────────────────────── */
   --c-border:      rgba(17,24,39,0.09);
   --c-border-md:   rgba(17,24,39,0.15);
@@ -97,6 +110,10 @@
   --c-surface-2:     #1A1C23;
   --c-surface-hover: #21232B;
   --c-overlay:       rgba(0,0,0,0.62);
+
+  /* Content goes darker than the chrome in this theme, so the frame
+     reads as slightly lighter and the notch still separates. */
+  --c-chrome:        #17181D;
 
   --c-border:      rgba(255,255,255,0.08);
   --c-border-md:   rgba(255,255,255,0.15);

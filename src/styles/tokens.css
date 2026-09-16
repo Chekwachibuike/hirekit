@@ -181,3 +181,35 @@ html { transition: background-color 0.3s ease; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ── Large-screen scaling ───────────────────────────────
+   Every page pins its own pixel max-width inline (1080 on the dashboard,
+   720 on forms). That reads well on a laptop but leaves the content
+   marooned in whitespace on a big monitor.
+
+   We scale the content box rather than widening it. Widening would stretch
+   reading columns past a comfortable measure and force each page to be
+   retuned; scaling keeps every page's proportions exactly as designed and
+   simply makes it bigger, which is what a large display is for.
+
+   zoom, not transform: scale — zoom reflows and keeps layout height honest,
+   so the page still scrolls correctly. transform would blur text and leave
+   the scroll box the old size.
+
+   The counter-zoom below is load-bearing: pages render their modals as
+   descendants of the content box, and a position:fixed element inside a
+   zoomed ancestor gets its inset:0 scaled too, so overlays would overflow
+   the viewport. Dividing back out returns them to the true viewport box.
+   Both spellings are matched because React emits "position:fixed" during
+   SSR while the CSSOM normalises it to "position: fixed" after hydration.
+   ─────────────────────────────────────────────────────── */
+:root { --content-zoom: 1; }
+
+@media (min-width: 1500px) { :root { --content-zoom: 1.08; } }
+@media (min-width: 1800px) { :root { --content-zoom: 1.18; } }
+@media (min-width: 2200px) { :root { --content-zoom: 1.30; } }
+
+main > * { zoom: var(--content-zoom); }
+
+main [style*="position:fixed"],
+main [style*="position: fixed"] { zoom: calc(1 / var(--content-zoom)); }

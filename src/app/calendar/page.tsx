@@ -47,6 +47,9 @@ interface GoogleFeedEvent {
 type DisplayEvent = CalendarEvent & {
   source?: 'google'
   htmlLink?: string | null
+  /** Set on expanded repeats of a recurring event — a React key only. The
+   *  `id` stays the master's, so editing an occurrence edits the series. */
+  instanceKey?: string
 }
 
 const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -78,6 +81,91 @@ function buildWeekDays(anchor: Date): Date[] {
   })
 }
 
+// ── Recurrence ───────────────────────────────────────────────
+// A deliberately small RRULE subset: exactly the patterns the modal offers.
+// A general RRULE engine would dwarf the UI that needs it, and the stored
+// value goes to Google untouched, where the full spec is honoured anyway.
+const REPEAT_OPTIONS = [
+  { key: 'none',     label: 'Does not repeat', rule: null },
+  { key: 'daily',    label: 'Daily',           rule: 'FREQ=DAILY' },
+  { key: 'weekdays', label: 'Every weekday (Mon–Fri)', rule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' },
+  { key: 'weekly',   label: 'Weekly',          rule: 'FREQ=WEEKLY' },
+  { key: 'monthly',  label: 'Monthly',         rule: 'FREQ=MONTHLY' },
+  { key: 'yearly',   label: 'Yearly',          rule: 'FREQ=YEARLY' },
+] as const
+type RepeatKey = typeof REPEAT_OPTIONS[number]['key'] | 'custom'
+
+function buildRRule(key: RepeatKey, until: string, hasTime: boolean): string | null {
+  const base = REPEAT_OPTIONS.find(o => o.key === key)?.rule
+  if (!base) return null
+  if (!until) return base
+  // UNTIL has to match DTSTART's type — a UTC date-time for timed events, a
+  // plain date for all-day ones. Google rejects the mismatched form.
+  const compact = until.replace(/-/g, '')
+  return `${base};UNTIL=${hasTime ? `${compact}T235959Z` : compact}`
+}
+
+function parseRRule(rrule?: string): { key: RepeatKey; until: string } {
+  if (!rrule) return { key: 'none', until: '' }
+  const m = rrule.match(/UNTIL=(\d{8})/)
+  const until = m ? `${m[1].slice(0, 4)}-${m[1].slice(4, 6)}-${m[1].slice(6, 8)}` : ''
+  const body = rrule.replace(/;?UNTIL=[^;]*/, '')
+  const found = REPEAT_OPTIONS.find(o => o.rule === body)
+  // Anything this UI cannot express — a rule edited in Google, say — is kept
+  // verbatim rather than silently downgraded to "does not repeat".
+  return { key: found ? found.key : 'custom', until }
+}
+
+const BYDAY: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 }
+
+/** Occurrence dates of `rrule` (started on `startISO`) falling inside the window. */
+function expandRecurrence(startISO: string, rrule: string, fromISO: string, toISO_: string): string[] {
+  const freq = rrule.match(/FREQ=(\w+)/)?.[1]
+  if (!freq) return []
+
+  const u = rrule.match(/UNTIL=(\d{8})/)?.[1]
+  const untilISO = u ? `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}` : null
+  const days = rrule.match(/BYDAY=([A-Z,]+)/)?.[1]
+    ?.split(',').map(d => BYDAY[d]).filter(n => n !== undefined)
+
+  const end = untilISO && untilISO < toISO_ ? untilISO : toISO_
+  const cur = new Date(`${startISO}T00:00:00`)
+  const perDay = freq === 'DAILY' || (freq === 'WEEKLY' && days)
+
+  // Jump to the window instead of walking from the original start date — a
+  // daily event begun years ago would otherwise burn thousands of iterations
+  // before reaching anything visible.
+  if (toISO(cur) < fromISO) {
+    const from = new Date(`${fromISO}T00:00:00`)
+    const dayMs = 86400000
+    if (perDay) {
+      cur.setTime(from.getTime())
+    } else if (freq === 'WEEKLY') {
+      const weeks = Math.ceil((from.getTime() - cur.getTime()) / (7 * dayMs))
+      cur.setDate(cur.getDate() + weeks * 7)
+    } else if (freq === 'MONTHLY') {
+      const months = (from.getFullYear() - cur.getFullYear()) * 12 + (from.getMonth() - cur.getMonth())
+      if (months > 0) cur.setMonth(cur.getMonth() + months)
+    } else if (freq === 'YEARLY') {
+      const years = from.getFullYear() - cur.getFullYear()
+      if (years > 0) cur.setFullYear(cur.getFullYear() + years)
+    }
+  }
+
+  const out: string[] = []
+  let guard = 0
+  while (toISO(cur) <= end && guard++ < 400) {
+    const iso = toISO(cur)
+    if (iso >= fromISO && (!days || days.includes(cur.getDay()))) out.push(iso)
+    if (freq === 'DAILY' || (freq === 'WEEKLY' && days)) cur.setDate(cur.getDate() + 1)
+    else if (freq === 'WEEKLY') cur.setDate(cur.getDate() + 7)
+    else if (freq === 'MONTHLY') cur.setMonth(cur.getMonth() + 1)
+    else if (freq === 'YEARLY') cur.setFullYear(cur.getFullYear() + 1)
+    else break
+  }
+  return out
+}
+
 // ── Event Modal ───────────────────────────────────────────────
 function EventModal({
   initial, onClose, onSave, onDelete, saving, deleting,
@@ -90,15 +178,25 @@ function EventModal({
   deleting: boolean
 }) {
   const ev = initial.event
+  const initialRepeat = parseRRule(ev?.recurrence)
   const [form, setForm] = useState({
     title: ev?.title ?? '',
     type: (ev?.type ?? 'other') as EventType,
     date: ev?.date ?? initial.date,
     time: ev?.time ?? '',
     notes: ev?.notes ?? '',
+    repeat: initialRepeat.key,
+    repeatUntil: initialRepeat.until,
   })
 
   const valid = form.title.trim() && form.date
+
+  // 'custom' means a rule this UI cannot render (edited in Google, most
+  // likely). Keep the original string rather than rewriting it from a
+  // dropdown that never represented it.
+  const recurrence = form.repeat === 'custom'
+    ? ev?.recurrence ?? null
+    : buildRRule(form.repeat, form.repeatUntil, !!form.time)
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -146,6 +244,35 @@ function EventModal({
             </Field>
           </div>
 
+          {/* Repeat */}
+          <div style={{ display: 'grid', gridTemplateColumns: form.repeat === 'none' ? '1fr' : '1fr 1fr', gap: 12 }}>
+            <Field label="Repeat" htmlFor="ev-repeat">
+              <select
+                id="ev-repeat"
+                value={form.repeat}
+                onChange={e => setForm(f => ({ ...f, repeat: e.target.value as RepeatKey }))}
+                style={inp}
+              >
+                {REPEAT_OPTIONS.map(o => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+                {form.repeat === 'custom' && (
+                  <option value="custom">Custom (set in Google)</option>
+                )}
+              </select>
+            </Field>
+            {form.repeat !== 'none' && (
+              <Field label="Repeat until (optional)" htmlFor="ev-repeat-until">
+                <input
+                  id="ev-repeat-until" type="date" aria-label="Repeat until"
+                  value={form.repeatUntil} min={form.date}
+                  onChange={e => setForm(f => ({ ...f, repeatUntil: e.target.value }))}
+                  style={inp}
+                />
+              </Field>
+            )}
+          </div>
+
           {/* Notes */}
           <Field label="Notes" htmlFor="ev-notes">
             <textarea id="ev-notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -162,7 +289,7 @@ function EventModal({
           ) : <span />}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={onClose} style={ghostBtn}>Cancel</button>
-            <button onClick={() => valid && onSave({ title: form.title, type: form.type, date: form.date, time: form.time || undefined, notes: form.notes || undefined })}
+            <button onClick={() => valid && onSave({ title: form.title, type: form.type, date: form.date, time: form.time || undefined, notes: form.notes || undefined, recurrence: recurrence || undefined })}
               disabled={!valid || saving} style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '8px 18px', borderRadius: 'var(--r-md)',
@@ -271,10 +398,13 @@ export default function CalendarPage() {
 
   // Events HireKit created were pushed to Google, so they come back in this
   // feed as well — drop those by id or every synced event renders twice.
+  // Recurring ones need a prefix test too: Google identifies each instance as
+  // "<masterId>_<timestamp>", so an exact match would only catch the first.
   const googleOnly = useMemo<DisplayEvent[]>(() => {
-    const mine = new Set(events.map(e => e.google_event_id).filter(Boolean))
+    const mine = events.map(e => e.google_event_id).filter(Boolean) as string[]
+    const isMine = (gid: string) => mine.some(m => gid === m || gid.startsWith(`${m}_`))
     return (googleFeed?.events ?? [])
-      .filter(g => !mine.has(g.googleId))
+      .filter(g => !isMine(g.googleId))
       .map(g => ({
         id: `g:${g.googleId}`,
         title: g.title,
@@ -289,9 +419,24 @@ export default function CalendarPage() {
       }))
   }, [events, googleFeed])
 
+  // Recurring HireKit events are stored once, as a master row with an RRULE.
+  // Expand them across the visible window so the repeats actually appear on
+  // the grid. Clones keep the master's id so editing one edits the series;
+  // instanceKey exists only to give React a distinct key per occurrence.
+  const localExpanded = useMemo<DisplayEvent[]>(() => {
+    const out: DisplayEvent[] = []
+    for (const e of events) {
+      if (!e.recurrence) { out.push(e); continue }
+      for (const d of expandRecurrence(e.date, e.recurrence, gFrom, gTo)) {
+        out.push(d === e.date ? e : { ...e, date: d, instanceKey: `${e.id}@${d}` })
+      }
+    }
+    return out
+  }, [events, gFrom, gTo])
+
   const allEvents = useMemo<DisplayEvent[]>(
-    () => [...events, ...googleOnly],
-    [events, googleOnly],
+    () => [...localExpanded, ...googleOnly],
+    [localExpanded, googleOnly],
   )
 
   // Google events are read-only here — editing them would need write-back
@@ -475,7 +620,7 @@ export default function CalendarPage() {
             const cfg = TYPE_CONFIG[e.type as EventType] ?? TYPE_CONFIG.other
             const d   = new Date(e.date + 'T00:00:00')
             return (
-              <button key={e.id} onClick={() => openEvent(e)} style={{
+              <button key={e.instanceKey ?? e.id} onClick={() => openEvent(e)} style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '7px 10px', borderRadius: 'var(--r-md)',
                 marginBottom: 4, cursor: 'pointer',
@@ -643,7 +788,7 @@ export default function CalendarPage() {
                         const cfg = TYPE_CONFIG[ev.type as EventType] ?? TYPE_CONFIG.other
                         return (
                           <div
-                            key={ev.id}
+                            key={ev.instanceKey ?? ev.id}
                             onClick={e => { e.stopPropagation(); openEvent(ev) }}
                             title={ev.source === 'google' ? 'From Google Calendar — opens in Google' : undefined}
                             style={{
@@ -734,7 +879,7 @@ export default function CalendarPage() {
                         {slotEvs.map(ev => {
                           const cfg = TYPE_CONFIG[ev.type as EventType] ?? TYPE_CONFIG.other
                           return (
-                            <div key={ev.id}
+                            <div key={ev.instanceKey ?? ev.id}
                               onClick={e => { e.stopPropagation(); openEvent(ev) }}
                               style={{
                                 padding: '3px 6px', borderRadius: 5, fontSize: 10, fontWeight: 600,

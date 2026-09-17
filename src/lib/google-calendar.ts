@@ -98,9 +98,16 @@ interface SyncableEvent {
   time?: string | null // HH:MM
   notes?: string | null
   timeZone?: string
+  /** RRULE body without the prefix, e.g. 'FREQ=WEEKLY'. Undefined = one-off. */
+  recurrence?: string | null
 }
 
 function toGoogleEventBody(event: SyncableEvent) {
+  // Google wants the full line including the prefix, and always as an array.
+  // Passing [] (not undefined) on edit is what clears an existing repeat —
+  // omitting the field leaves the old rule in place.
+  const recurrence = event.recurrence ? [`RRULE:${event.recurrence}`] : []
+
   if (event.time) {
     const startDateTime = `${event.date}T${event.time}:00`
     const [h, m] = event.time.split(':').map(Number)
@@ -112,6 +119,7 @@ function toGoogleEventBody(event: SyncableEvent) {
       description: event.notes || undefined,
       start: { dateTime: startDateTime, timeZone: event.timeZone || 'UTC' },
       end: { dateTime: endDateTime, timeZone: event.timeZone || 'UTC' },
+      recurrence,
     }
   }
   // All-day event — Google's end.date is exclusive, so it's start + 1 day.
@@ -123,6 +131,7 @@ function toGoogleEventBody(event: SyncableEvent) {
     description: event.notes || undefined,
     start: { date: event.date },
     end: { date: endDate },
+    recurrence,
   }
 }
 

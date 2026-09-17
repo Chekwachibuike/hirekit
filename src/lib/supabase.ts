@@ -122,6 +122,8 @@ export interface CalendarEvent {
   application_id?: string
   notes?: string
   google_event_id?: string
+  /** iCalendar RRULE body without the "RRULE:" prefix. Undefined = one-off. */
+  recurrence?: string
   created_at: string
 }
 

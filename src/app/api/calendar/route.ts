@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { title, type, date, time, notes, application_id, timeZone } = body
+  const { title, type, date, time, notes, application_id, timeZone, recurrence } = body
   if (!title || !type || !date) {
     return NextResponse.json({ error: 'title, type, and date are required' }, { status: 400 })
   }
@@ -37,16 +37,28 @@ export async function POST(req: NextRequest) {
     user_id: user.id, title, type, date,
     time: time || null, notes: notes || null,
     application_id: application_id || null,
+    recurrence: recurrence || null,
   }).select().single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // 42703 = undefined_column. Means migration 007 has not been run, and the
+    // symptom would otherwise be "saving an event just fails" with nothing
+    // pointing at the cause.
+    if (error.code === '42703') {
+      return NextResponse.json(
+        { error: 'Database is missing the recurrence column — run supabase/migrations/007_recurring_events.sql in the Supabase SQL editor.' },
+        { status: 500 },
+      )
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   // Best-effort push to Google Calendar — a sync failure shouldn't fail the
   // request, since the event is already safely saved in our own database.
   try {
     const auth = await getAuthorizedClientForUser(supabase, user.id)
     if (auth) {
-      const googleEventId = await pushEventToGoogle(auth.client, auth.calendarId, { title, date, time, notes, timeZone })
+      const googleEventId = await pushEventToGoogle(auth.client, auth.calendarId, { title, date, time, notes, timeZone, recurrence })
       if (googleEventId) {
         const { data: updated } = await supabase
           .from('calendar_events')
@@ -80,7 +92,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const auth = await getAuthorizedClientForUser(supabase, user.id)
     if (auth) {
-      const eventBody = { title: data.title, date: data.date, time: data.time, notes: data.notes, timeZone }
+      const eventBody = { title: data.title, date: data.date, time: data.time, notes: data.notes, timeZone, recurrence: data.recurrence }
       if (data.google_event_id) {
         await updateEventOnGoogle(auth.client, auth.calendarId, data.google_event_id, eventBody)
       } else {

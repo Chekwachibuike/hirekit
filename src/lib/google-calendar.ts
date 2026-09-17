@@ -100,6 +100,16 @@ interface SyncableEvent {
   timeZone?: string
   /** RRULE body without the prefix, e.g. 'FREQ=WEEKLY'. Undefined = one-off. */
   recurrence?: string | null
+  /** Minutes before the event. null/undefined = calendar default, -1 = none. */
+  reminderMinutes?: number | null
+}
+
+// Google models reminders as a useDefault flag plus an overrides list. Folding
+// our single column onto that here keeps the sentinel in one place.
+function toGoogleReminders(minutes?: number | null) {
+  if (minutes === undefined || minutes === null) return { useDefault: true }
+  if (minutes < 0) return { useDefault: false, overrides: [] }
+  return { useDefault: false, overrides: [{ method: 'popup', minutes }] }
 }
 
 function toGoogleEventBody(event: SyncableEvent) {
@@ -107,6 +117,7 @@ function toGoogleEventBody(event: SyncableEvent) {
   // Passing [] (not undefined) on edit is what clears an existing repeat —
   // omitting the field leaves the old rule in place.
   const recurrence = event.recurrence ? [`RRULE:${event.recurrence}`] : []
+  const reminders = toGoogleReminders(event.reminderMinutes)
 
   if (event.time) {
     const startDateTime = `${event.date}T${event.time}:00`
@@ -120,6 +131,7 @@ function toGoogleEventBody(event: SyncableEvent) {
       start: { dateTime: startDateTime, timeZone: event.timeZone || 'UTC' },
       end: { dateTime: endDateTime, timeZone: event.timeZone || 'UTC' },
       recurrence,
+      reminders,
     }
   }
   // All-day event — Google's end.date is exclusive, so it's start + 1 day.
@@ -132,6 +144,7 @@ function toGoogleEventBody(event: SyncableEvent) {
     start: { date: event.date },
     end: { date: endDate },
     recurrence,
+    reminders,
   }
 }
 

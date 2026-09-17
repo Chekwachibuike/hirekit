@@ -124,6 +124,8 @@ export interface CalendarEvent {
   google_event_id?: string
   /** iCalendar RRULE body without the "RRULE:" prefix. Undefined = one-off. */
   recurrence?: string
+  /** Minutes before the event to notify. null = Google default, -1 = none. */
+  reminder_minutes?: number | null
   created_at: string
 }
 

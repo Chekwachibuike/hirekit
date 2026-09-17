@@ -116,6 +116,19 @@ function parseRRule(rrule?: string): { key: RepeatKey; until: string } {
   return { key: found ? found.key : 'custom', until }
 }
 
+// Delivery is Google's, not ours: a reminder set here fires on the user's
+// phone and desktop whether or not HireKit is running. '' means inherit the
+// calendar's own default; -1 means explicitly none.
+const REMINDER_OPTIONS: { value: string; label: string }[] = [
+  { value: '',     label: 'Default (from Google)' },
+  { value: '-1',   label: 'No reminder' },
+  { value: '0',    label: 'At time of event' },
+  { value: '10',   label: '10 minutes before' },
+  { value: '30',   label: '30 minutes before' },
+  { value: '60',   label: '1 hour before' },
+  { value: '1440', label: '1 day before' },
+]
+
 const BYDAY: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 }
 
 /** Occurrence dates of `rrule` (started on `startISO`) falling inside the window. */
@@ -187,6 +200,8 @@ function EventModal({
     notes: ev?.notes ?? '',
     repeat: initialRepeat.key,
     repeatUntil: initialRepeat.until,
+    reminder: ev?.reminder_minutes === null || ev?.reminder_minutes === undefined
+      ? '' : String(ev.reminder_minutes),
   })
 
   const valid = form.title.trim() && form.date
@@ -273,6 +288,20 @@ function EventModal({
             )}
           </div>
 
+          {/* Reminder — delivered by Google, so it reaches the phone too */}
+          <Field label="Reminder" htmlFor="ev-reminder">
+            <select
+              id="ev-reminder"
+              value={form.reminder}
+              onChange={e => setForm(f => ({ ...f, reminder: e.target.value }))}
+              style={inp}
+            >
+              {REMINDER_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </Field>
+
           {/* Notes */}
           <Field label="Notes" htmlFor="ev-notes">
             <textarea id="ev-notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -289,7 +318,7 @@ function EventModal({
           ) : <span />}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={onClose} style={ghostBtn}>Cancel</button>
-            <button onClick={() => valid && onSave({ title: form.title, type: form.type, date: form.date, time: form.time || undefined, notes: form.notes || undefined, recurrence: recurrence || undefined })}
+            <button onClick={() => valid && onSave({ title: form.title, type: form.type, date: form.date, time: form.time || undefined, notes: form.notes || undefined, recurrence: recurrence || undefined, reminder_minutes: form.reminder === '' ? null : Number(form.reminder) })}
               disabled={!valid || saving} style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '8px 18px', borderRadius: 'var(--r-md)',
@@ -352,6 +381,7 @@ export default function CalendarPage() {
   const [deleting, setDeleting]       = useState(false)
   const [miniSel, setMiniSel]         = useState(today())
   const [disconnecting, setDisconnecting] = useState(false)
+  const [syncWarning, setSyncWarning] = useState<string | null>(null)
 
   // Cached under CALENDAR_KEY — revisiting this page shows the last list
   // instantly while a background refetch keeps it current.
@@ -532,6 +562,12 @@ export default function CalendarPage() {
       const res  = await fetch('/api/calendar', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
+      // The event saved locally either way, but say so when Google did not
+      // take it — otherwise the two quietly drift apart with nothing on
+      // screen to suggest anything is wrong.
+      setSyncWarning(json.googleSync === 'failed'
+        ? `Saved here, but Google Calendar did not accept it${json.googleError ? `: ${json.googleError}` : '.'}`
+        : null)
       if (editId) {
         mutate(ev => (ev ?? []).map(e => e.id === editId ? json.event : e), { revalidate: false })
       } else {
@@ -916,6 +952,14 @@ export default function CalendarPage() {
       {loading && (
         <div style={{ position: 'fixed', bottom: 20, right: 20, background: 'var(--c-bg-3)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', padding: '8px 14px', fontSize: 12, color: 'var(--c-text-muted)', display: 'flex', alignItems: 'center', gap: 6, zIndex: 100 }}>
           <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Loading events…
+        </div>
+      )}
+
+      {syncWarning && (
+        <div style={{ position: 'fixed', bottom: 20, right: 20, maxWidth: 380, background: 'var(--c-bg-3)', border: '1px solid rgba(224,50,85,0.35)', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 12, color: 'var(--c-text)', display: 'flex', alignItems: 'flex-start', gap: 8, zIndex: 120 }}>
+          <AlertCircle size={13} style={{ color: 'var(--c-red)', flexShrink: 0, marginTop: 1 }} />
+          <span style={{ lineHeight: 1.5 }}>{syncWarning}</span>
+          <button aria-label="Dismiss" onClick={() => setSyncWarning(null)} style={{ ...iconBtn, marginLeft: 'auto' }}><X size={13} /></button>
         </div>
       )}
     </div>

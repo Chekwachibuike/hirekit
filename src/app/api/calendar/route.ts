@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { title, type, date, time, notes, application_id, timeZone, recurrence } = body
+  const { title, type, date, time, notes, application_id, timeZone, recurrence, reminder_minutes } = body
   if (!title || !type || !date) {
     return NextResponse.json({ error: 'title, type, and date are required' }, { status: 400 })
   }
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
     time: time || null, notes: notes || null,
     application_id: application_id || null,
     recurrence: recurrence || null,
+    reminder_minutes: reminder_minutes ?? null,
   }).select().single()
 
   if (error) {
@@ -53,27 +54,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Best-effort push to Google Calendar — a sync failure shouldn't fail the
-  // request, since the event is already safely saved in our own database.
+  // The push is best-effort — the event is already safely in our database, so
+  // a Google failure must not fail the request. But it is reported rather than
+  // swallowed: silently logging to a file the desktop shell overwrites on every
+  // launch is how an event ended up weekly here and one-off in Google with
+  // nothing anywhere to say so.
   try {
     const auth = await getAuthorizedClientForUser(supabase, user.id)
-    if (auth) {
-      const googleEventId = await pushEventToGoogle(auth.client, auth.calendarId, { title, date, time, notes, timeZone, recurrence })
-      if (googleEventId) {
-        const { data: updated } = await supabase
-          .from('calendar_events')
-          .update({ google_event_id: googleEventId })
-          .eq('id', data.id)
-          .select()
-          .single()
-        return NextResponse.json({ event: updated ?? data }, { status: 201 })
-      }
+    if (!auth) return NextResponse.json({ event: data, googleSync: 'not-connected' }, { status: 201 })
+
+    const googleEventId = await pushEventToGoogle(auth.client, auth.calendarId, {
+      title, date, time, notes, timeZone, recurrence, reminderMinutes: reminder_minutes,
+    })
+    if (googleEventId) {
+      const { data: updated } = await supabase
+        .from('calendar_events')
+        .update({ google_event_id: googleEventId })
+        .eq('id', data.id)
+        .select()
+        .single()
+      return NextResponse.json({ event: updated ?? data, googleSync: 'ok' }, { status: 201 })
     }
   } catch (err) {
     console.error('[calendar POST → google sync]', err)
+    return NextResponse.json(
+      { event: data, googleSync: 'failed', googleError: err instanceof Error ? err.message : String(err) },
+      { status: 201 },
+    )
   }
 
-  return NextResponse.json({ event: data }, { status: 201 })
+  return NextResponse.json({ event: data, googleSync: 'failed' }, { status: 201 })
 }
 
 export async function PATCH(req: NextRequest) {
@@ -89,10 +99,15 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  let googleSync: 'ok' | 'failed' | 'not-connected' = 'not-connected'
+  let googleError: string | undefined
   try {
     const auth = await getAuthorizedClientForUser(supabase, user.id)
     if (auth) {
-      const eventBody = { title: data.title, date: data.date, time: data.time, notes: data.notes, timeZone, recurrence: data.recurrence }
+      const eventBody = {
+        title: data.title, date: data.date, time: data.time, notes: data.notes,
+        timeZone, recurrence: data.recurrence, reminderMinutes: data.reminder_minutes,
+      }
       if (data.google_event_id) {
         await updateEventOnGoogle(auth.client, auth.calendarId, data.google_event_id, eventBody)
       } else {
@@ -103,12 +118,15 @@ export async function PATCH(req: NextRequest) {
           data.google_event_id = googleEventId
         }
       }
+      googleSync = 'ok'
     }
   } catch (err) {
     console.error('[calendar PATCH → google sync]', err)
+    googleSync = 'failed'
+    googleError = err instanceof Error ? err.message : String(err)
   }
 
-  return NextResponse.json({ event: data })
+  return NextResponse.json({ event: data, googleSync, googleError })
 }
 
 export async function DELETE(req: NextRequest) {

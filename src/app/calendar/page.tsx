@@ -8,6 +8,10 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { fetcher } from '@/lib/fetcher'
 import type { CalendarEvent } from '@/lib/supabase'
+import {
+  toISO, todayISO as today, expandRecurrence,
+  buildRRule, parseRRule, REPEAT_OPTIONS, type RepeatKey,
+} from '@/lib/recurrence'
 
 const CALENDAR_KEY = 'calendar-events'
 const GOOGLE_STATUS_KEY = '/api/calendar/google/status'
@@ -56,12 +60,20 @@ const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const HOURS  = Array.from({ length: 16 }, (_, i) => i + 6) // 6am – 9pm
 
-// ── Helpers ──────────────────────────────────────────────────
-function toISO(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-function today() { return toISO(new Date()) }
+// Delivery is Google's, not ours: a reminder set here fires on the user's
+// phone and desktop whether or not HireKit is running. '' means inherit the
+// calendar's own default; -1 means explicitly none.
+const REMINDER_OPTIONS: { value: string; label: string }[] = [
+  { value: '',     label: 'Default (from Google)' },
+  { value: '-1',   label: 'No reminder' },
+  { value: '0',    label: 'At time of event' },
+  { value: '10',   label: '10 minutes before' },
+  { value: '30',   label: '30 minutes before' },
+  { value: '60',   label: '1 hour before' },
+  { value: '1440', label: '1 day before' },
+]
 
+// ── Helpers ──────────────────────────────────────────────────
 function buildMonthGrid(year: number, month: number): Date[] {
   const first = new Date(year, month, 1)
   const last  = new Date(year, month + 1, 0)
@@ -79,104 +91,6 @@ function buildWeekDays(anchor: Date): Date[] {
     d.setDate(anchor.getDate() - dow + i)
     return d
   })
-}
-
-// ── Recurrence ───────────────────────────────────────────────
-// A deliberately small RRULE subset: exactly the patterns the modal offers.
-// A general RRULE engine would dwarf the UI that needs it, and the stored
-// value goes to Google untouched, where the full spec is honoured anyway.
-const REPEAT_OPTIONS = [
-  { key: 'none',     label: 'Does not repeat', rule: null },
-  { key: 'daily',    label: 'Daily',           rule: 'FREQ=DAILY' },
-  { key: 'weekdays', label: 'Every weekday (Mon–Fri)', rule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' },
-  { key: 'weekly',   label: 'Weekly',          rule: 'FREQ=WEEKLY' },
-  { key: 'monthly',  label: 'Monthly',         rule: 'FREQ=MONTHLY' },
-  { key: 'yearly',   label: 'Yearly',          rule: 'FREQ=YEARLY' },
-] as const
-type RepeatKey = typeof REPEAT_OPTIONS[number]['key'] | 'custom'
-
-function buildRRule(key: RepeatKey, until: string, hasTime: boolean): string | null {
-  const base = REPEAT_OPTIONS.find(o => o.key === key)?.rule
-  if (!base) return null
-  if (!until) return base
-  // UNTIL has to match DTSTART's type — a UTC date-time for timed events, a
-  // plain date for all-day ones. Google rejects the mismatched form.
-  const compact = until.replace(/-/g, '')
-  return `${base};UNTIL=${hasTime ? `${compact}T235959Z` : compact}`
-}
-
-function parseRRule(rrule?: string): { key: RepeatKey; until: string } {
-  if (!rrule) return { key: 'none', until: '' }
-  const m = rrule.match(/UNTIL=(\d{8})/)
-  const until = m ? `${m[1].slice(0, 4)}-${m[1].slice(4, 6)}-${m[1].slice(6, 8)}` : ''
-  const body = rrule.replace(/;?UNTIL=[^;]*/, '')
-  const found = REPEAT_OPTIONS.find(o => o.rule === body)
-  // Anything this UI cannot express — a rule edited in Google, say — is kept
-  // verbatim rather than silently downgraded to "does not repeat".
-  return { key: found ? found.key : 'custom', until }
-}
-
-// Delivery is Google's, not ours: a reminder set here fires on the user's
-// phone and desktop whether or not HireKit is running. '' means inherit the
-// calendar's own default; -1 means explicitly none.
-const REMINDER_OPTIONS: { value: string; label: string }[] = [
-  { value: '',     label: 'Default (from Google)' },
-  { value: '-1',   label: 'No reminder' },
-  { value: '0',    label: 'At time of event' },
-  { value: '10',   label: '10 minutes before' },
-  { value: '30',   label: '30 minutes before' },
-  { value: '60',   label: '1 hour before' },
-  { value: '1440', label: '1 day before' },
-]
-
-const BYDAY: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 }
-
-/** Occurrence dates of `rrule` (started on `startISO`) falling inside the window. */
-function expandRecurrence(startISO: string, rrule: string, fromISO: string, toISO_: string): string[] {
-  const freq = rrule.match(/FREQ=(\w+)/)?.[1]
-  if (!freq) return []
-
-  const u = rrule.match(/UNTIL=(\d{8})/)?.[1]
-  const untilISO = u ? `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}` : null
-  const days = rrule.match(/BYDAY=([A-Z,]+)/)?.[1]
-    ?.split(',').map(d => BYDAY[d]).filter(n => n !== undefined)
-
-  const end = untilISO && untilISO < toISO_ ? untilISO : toISO_
-  const cur = new Date(`${startISO}T00:00:00`)
-  const perDay = freq === 'DAILY' || (freq === 'WEEKLY' && days)
-
-  // Jump to the window instead of walking from the original start date — a
-  // daily event begun years ago would otherwise burn thousands of iterations
-  // before reaching anything visible.
-  if (toISO(cur) < fromISO) {
-    const from = new Date(`${fromISO}T00:00:00`)
-    const dayMs = 86400000
-    if (perDay) {
-      cur.setTime(from.getTime())
-    } else if (freq === 'WEEKLY') {
-      const weeks = Math.ceil((from.getTime() - cur.getTime()) / (7 * dayMs))
-      cur.setDate(cur.getDate() + weeks * 7)
-    } else if (freq === 'MONTHLY') {
-      const months = (from.getFullYear() - cur.getFullYear()) * 12 + (from.getMonth() - cur.getMonth())
-      if (months > 0) cur.setMonth(cur.getMonth() + months)
-    } else if (freq === 'YEARLY') {
-      const years = from.getFullYear() - cur.getFullYear()
-      if (years > 0) cur.setFullYear(cur.getFullYear() + years)
-    }
-  }
-
-  const out: string[] = []
-  let guard = 0
-  while (toISO(cur) <= end && guard++ < 400) {
-    const iso = toISO(cur)
-    if (iso >= fromISO && (!days || days.includes(cur.getDay()))) out.push(iso)
-    if (freq === 'DAILY' || (freq === 'WEEKLY' && days)) cur.setDate(cur.getDate() + 1)
-    else if (freq === 'WEEKLY') cur.setDate(cur.getDate() + 7)
-    else if (freq === 'MONTHLY') cur.setMonth(cur.getMonth() + 1)
-    else if (freq === 'YEARLY') cur.setFullYear(cur.getFullYear() + 1)
-    else break
-  }
-  return out
 }
 
 // ── Event Modal ───────────────────────────────────────────────

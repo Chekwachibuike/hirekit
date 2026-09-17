@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, Bell, Sun, Moon, Monitor, LogOut } from 'lucide-react'
+import { Sparkles, Sun, Moon, Monitor, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/useTheme'
+import NotificationBell from './NotificationBell'
 
 function IconButton({ label, onClick, title, children }: {
   label: string; onClick?: () => void; title?: string; children: React.ReactNode
@@ -93,14 +94,7 @@ export default function Header() {
       </IconButton>
 
       {/* Notifications */}
-      <IconButton label="Notifications">
-        <Bell size={15} />
-        <span style={{
-          position: 'absolute', top: 8, right: 8,
-          width: 6, height: 6, borderRadius: '50%',
-          background: 'var(--c-coral)', border: '1.5px solid var(--c-chrome)',
-        }} />
-      </IconButton>
+      <NotificationBell />
 
       <div style={{ width: 1, height: 22, background: 'var(--c-chrome-border)', margin: '0 3px' }} />
 

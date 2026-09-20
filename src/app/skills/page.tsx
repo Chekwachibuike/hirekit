@@ -5,11 +5,17 @@ import useSWR from 'swr'
 import { ChevronDown, ChevronRight, Loader2, Check, BrainCircuit, Target } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
 import {
-  SKILL_DOMAINS, LEVELS, ROLE_PROFILES, ALL_SKILLS_COUNT,
+  LEVELS, TRACKS, domainsForTrack, rolesForTrack, trackSkillCount,
   roleReadiness, type SkillLevel,
 } from '@/lib/skills-taxonomy'
 
 type Levels = Record<string, SkillLevel>
+
+// Which track is on screen is a view preference, not data: ratings are keyed
+// by skill id regardless of track, so switching loses nothing and a shared
+// skill stays rated in both. localStorage is the right home for it — no
+// column, no migration, no round trip.
+const TRACK_KEY = 'hirekit-skills-track'
 
 export default function SkillsPage() {
   const { data, isLoading } = useSWR<{ data: { levels: Levels } }>('/api/skill-assessment', fetcher)
@@ -18,9 +24,32 @@ export default function SkillsPage() {
   const [loaded, setLoaded]   = useState(false)
   const [saving, setSaving]   = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
-  const [open, setOpen]       = useState<Record<string, boolean>>({ [SKILL_DOMAINS[0].id]: true })
-  const [activeRole, setActiveRole] = useState(ROLE_PROFILES[2].id) // fullstack default
+  const [trackId, setTrackId] = useState(TRACKS[0].id)
+  const [open, setOpen]       = useState<Record<string, boolean>>({})
+  const [activeRole, setActiveRole] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const domains = useMemo(() => domainsForTrack(trackId), [trackId])
+  const roles   = useMemo(() => rolesForTrack(trackId), [trackId])
+  const trackTotal = useMemo(() => trackSkillCount(trackId), [trackId])
+
+  // localStorage is unavailable during SSR, so restore after mount.
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(TRACK_KEY) : null
+    if (saved && TRACKS.some(t => t.id === saved)) setTrackId(saved)
+  }, [])
+
+  function chooseTrack(id: string) {
+    setTrackId(id)
+    setActiveRole(null)   // roles are per-track; fall back to the new track's first
+    setOpen({})
+    try { localStorage.setItem(TRACK_KEY, id) } catch { /* storage blocked */ }
+  }
+
+  // Open the first domain of whichever track is showing.
+  useEffect(() => {
+    setOpen(o => (Object.keys(o).length ? o : { [domains[0].id]: true }))
+  }, [domains])
 
   // Hydrate local state once from the server copy
   useEffect(() => {
@@ -58,8 +87,18 @@ export default function SkillsPage() {
     }, 1200)
   }
 
-  const assessedCount = Object.keys(levels).length
-  const role = ROLE_PROFILES.find(r => r.id === activeRole) ?? ROLE_PROFILES[0]
+  // Counted within the track on screen, so "rated" matches what is listed
+  // rather than every skill in the app.
+  const trackSkillIds = useMemo(
+    () => new Set(domains.flatMap(d => d.skills.map(s => s.id))),
+    [domains],
+  )
+  const assessedCount = useMemo(
+    () => Object.keys(levels).filter(id => trackSkillIds.has(id)).length,
+    [levels, trackSkillIds],
+  )
+
+  const role = roles.find(r => r.id === activeRole) ?? roles[0]
   const readiness = useMemo(() => roleReadiness(role, levels), [role, levels])
 
   // Top gaps become the Interview Prep focus — carried via query param
@@ -87,7 +126,7 @@ export default function SkillsPage() {
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Skills Audit</h1>
           <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>
-            Rate yourself honestly on {ALL_SKILLS_COUNT} microskills — see how ready you are for each role
+            Rate yourself honestly on {trackTotal} microskills in this track — see how ready you are for each role
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--c-text-dim)', flexShrink: 0 }}>
@@ -96,7 +135,7 @@ export default function SkillsPage() {
             : savedAt
             ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--c-teal)' }}><Check size={12} /> Saved</span>
             : null}
-          <span>{assessedCount} / {ALL_SKILLS_COUNT} rated</span>
+          <span>{assessedCount} / {trackTotal} rated</span>
         </div>
       </div>
 
@@ -104,6 +143,38 @@ export default function SkillsPage() {
 
         {/* ── Left: checklist ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px', minWidth: 0 }}>
+
+          {/* Track selector — the taxonomy shown below depends on this */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {TRACKS.map(t => {
+                const active = t.id === trackId
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => chooseTrack(t.id)}
+                    title={t.blurb}
+                    style={{
+                      padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
+                      fontFamily: 'var(--font-body)', fontSize: 12.5,
+                      fontWeight: active ? 700 : 500,
+                      background: active ? 'var(--c-violet-dim)' : 'var(--c-bg-2)',
+                      border: `1.5px solid ${active ? 'var(--c-violet)' : 'var(--c-border)'}`,
+                      color: active ? 'var(--c-violet)' : 'var(--c-text-muted)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {t.name}
+                  </button>
+                )
+              })}
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--c-text-dim)', marginTop: 8, lineHeight: 1.5 }}>
+              {TRACKS.find(t => t.id === trackId)?.blurb}. Ratings are kept per skill,
+              so anything shared between tracks — CS fundamentals, databases, Git — stays rated
+              when you switch.
+            </p>
+          </div>
 
           {/* Level legend */}
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)' }}>
@@ -116,7 +187,7 @@ export default function SkillsPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
-            {SKILL_DOMAINS.map(domain => {
+            {domains.map(domain => {
               const isOpen = !!open[domain.id]
               const rated = domain.skills.filter(s => levels[s.id]).length
               return (
@@ -185,7 +256,7 @@ export default function SkillsPage() {
 
           {/* Role tabs */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
-            {ROLE_PROFILES.map(r => {
+            {roles.map(r => {
               const rd = roleReadiness(r, levels)
               const active = r.id === activeRole
               return (

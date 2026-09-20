@@ -1,7 +1,12 @@
 // Compact microskill taxonomy — adapted from the method in
 // github.com/HowProgrammingWorks/SelfAssessment (700+ skills, 7 levels),
-// trimmed to ~110 skills across 7 domains and 4 levels to stay lightweight.
+// trimmed to 4 levels and grouped into domains to stay lightweight.
 // Static data: no fetch, a few KB in the bundle, tree-shaken per page.
+//
+// Domains are grouped into TRACKS (web, AI engineering, embedded/PCB) further
+// down. Ratings are stored in one flat map keyed by skill id, so a domain that
+// several tracks share — CS fundamentals, databases, Git — is rated once and
+// counts for all of them.
 
 export type SkillLevel = 0 | 1 | 2 | 3 | 4
 
@@ -141,6 +146,192 @@ export const SKILL_DOMAINS: SkillDomain[] = [
       { id: 'ops.dns',         name: 'DNS, domains, HTTPS/TLS' },
     ],
   },
+
+  // ── AI engineering ──────────────────────────────────────────────
+  {
+    id: 'py', name: 'Python for AI',
+    skills: [
+      { id: 'py.types',     name: 'Types, collections, comprehensions' },
+      { id: 'py.functions', name: 'Functions, *args/**kwargs, decorators' },
+      { id: 'py.oop',       name: 'Classes, dataclasses, protocols' },
+      { id: 'py.typing',    name: 'Type hints & mypy' },
+      { id: 'py.venv',      name: 'Virtual envs, pip/uv, pinning deps' },
+      { id: 'py.numpy',     name: 'NumPy arrays & broadcasting' },
+      { id: 'py.pandas',    name: 'pandas DataFrames, joins, groupby' },
+      { id: 'py.async',     name: 'asyncio & concurrency' },
+      { id: 'py.testing',   name: 'pytest & fixtures' },
+      { id: 'py.notebooks', name: 'Notebook workflow & reproducibility' },
+    ],
+  },
+  {
+    id: 'ml', name: 'Machine Learning Foundations',
+    skills: [
+      { id: 'ml.supervised', name: 'Supervised vs unsupervised learning' },
+      { id: 'ml.split',      name: 'Train/validation/test splits & leakage' },
+      { id: 'ml.overfit',    name: 'Overfitting & the bias–variance tradeoff' },
+      { id: 'ml.regularise', name: 'Regularisation (L1/L2, dropout)' },
+      { id: 'ml.metrics',    name: 'Metrics: precision, recall, F1, ROC-AUC' },
+      { id: 'ml.crossval',   name: 'Cross-validation' },
+      { id: 'ml.features',   name: 'Feature engineering & scaling' },
+      { id: 'ml.imbalance',  name: 'Class imbalance handling' },
+      { id: 'ml.linear',     name: 'Linear & logistic regression' },
+      { id: 'ml.trees',      name: 'Trees, random forests, gradient boosting' },
+      { id: 'ml.cluster',    name: 'Clustering & dimensionality reduction' },
+    ],
+  },
+  {
+    id: 'dl', name: 'Deep Learning',
+    skills: [
+      { id: 'dl.tensors',     name: 'Tensors, shapes & broadcasting' },
+      { id: 'dl.autograd',    name: 'Autograd & backpropagation' },
+      { id: 'dl.optim',       name: 'Optimisers & LR schedules' },
+      { id: 'dl.loss',        name: 'Loss functions & when to use which' },
+      { id: 'dl.torch',       name: 'PyTorch training loops' },
+      { id: 'dl.cnn',         name: 'CNNs & computer vision' },
+      { id: 'dl.seq',         name: 'RNNs/LSTMs & sequence models' },
+      { id: 'dl.transformer', name: 'Transformers & self-attention' },
+      { id: 'dl.pretrain',    name: 'Pretraining vs fine-tuning' },
+      { id: 'dl.peft',        name: 'LoRA / PEFT fine-tuning' },
+      { id: 'dl.gpu',         name: 'GPU memory, batching, mixed precision' },
+    ],
+  },
+  {
+    id: 'llm', name: 'LLM Engineering',
+    skills: [
+      { id: 'llm.tokens',     name: 'Tokenisation & context windows' },
+      { id: 'llm.prompt',     name: 'Prompt design & few-shot examples' },
+      { id: 'llm.structured', name: 'Structured output & JSON schemas' },
+      { id: 'llm.embed',      name: 'Embeddings & semantic similarity' },
+      { id: 'llm.vector',     name: 'Vector databases & indexing' },
+      { id: 'llm.rag',        name: 'RAG: chunking, retrieval, reranking' },
+      { id: 'llm.tools',      name: 'Tool use / function calling' },
+      { id: 'llm.agents',     name: 'Agent loops & orchestration' },
+      { id: 'llm.eval',       name: 'Evals & regression testing' },
+      { id: 'llm.guard',      name: 'Guardrails, safety & prompt injection' },
+      { id: 'llm.cost',       name: 'Cost, latency & caching' },
+      { id: 'llm.choose',     name: 'Choosing prompt vs RAG vs fine-tune' },
+    ],
+  },
+  {
+    id: 'mlops', name: 'MLOps & Serving',
+    skills: [
+      { id: 'mlops.track',    name: 'Experiment tracking' },
+      { id: 'mlops.registry', name: 'Model registry & versioning' },
+      { id: 'mlops.serve',    name: 'Model serving & inference APIs' },
+      { id: 'mlops.docker',   name: 'Containerising models' },
+      { id: 'mlops.quant',    name: 'Quantisation & distillation' },
+      { id: 'mlops.scale',    name: 'Batch vs real-time inference' },
+      { id: 'mlops.monitor',  name: 'Monitoring & drift detection' },
+      { id: 'mlops.pipeline', name: 'Data pipelines & feature stores' },
+    ],
+  },
+
+  // ── Embedded systems & PCB ──────────────────────────────────────
+  {
+    id: 'ec', name: 'C/C++ for Embedded',
+    skills: [
+      { id: 'ec.pointers', name: 'Pointers & memory layout' },
+      { id: 'ec.memory',   name: 'Stack vs heap, static allocation' },
+      { id: 'ec.bits',     name: 'Bit manipulation & masks' },
+      { id: 'ec.volatile', name: 'volatile, const & memory-mapped I/O' },
+      { id: 'ec.structs',  name: 'Structs, unions & packing' },
+      { id: 'ec.stdint',   name: 'Fixed-width types & endianness' },
+      { id: 'ec.linker',   name: 'Linker scripts & memory sections' },
+      { id: 'ec.build',    name: 'Makefiles & cross-compilation toolchains' },
+      { id: 'ec.debug',    name: 'Debugging over GDB / JTAG / SWD' },
+    ],
+  },
+  {
+    id: 'mcu', name: 'Microcontrollers',
+    skills: [
+      { id: 'mcu.gpio',      name: 'GPIO configuration & pin muxing' },
+      { id: 'mcu.interrupt', name: 'Interrupts & ISR design' },
+      { id: 'mcu.timers',    name: 'Timers, counters & PWM' },
+      { id: 'mcu.adc',       name: 'ADC/DAC & sampling' },
+      { id: 'mcu.uart',      name: 'UART & serial protocols' },
+      { id: 'mcu.i2c',       name: 'I2C' },
+      { id: 'mcu.spi',       name: 'SPI' },
+      { id: 'mcu.dma',       name: 'DMA transfers' },
+      { id: 'mcu.clock',     name: 'Clock trees & configuration' },
+      { id: 'mcu.datasheet', name: 'Reading datasheets & register maps' },
+      { id: 'mcu.power',     name: 'Low-power modes & sleep' },
+    ],
+  },
+  {
+    id: 'rtos', name: 'RTOS & Firmware',
+    skills: [
+      { id: 'rtos.tasks',        name: 'Tasks & scheduling' },
+      { id: 'rtos.sync',         name: 'Semaphores, mutexes, priority inversion' },
+      { id: 'rtos.queue',        name: 'Queues & message passing' },
+      { id: 'rtos.isr',          name: 'ISR-safe APIs & deferred work' },
+      { id: 'rtos.timing',       name: 'Real-time constraints & jitter' },
+      { id: 'rtos.statemachine', name: 'State machines & event-driven firmware' },
+      { id: 'rtos.watchdog',     name: 'Watchdogs & fault recovery' },
+      { id: 'rtos.ota',          name: 'Bootloaders & OTA updates' },
+    ],
+  },
+  {
+    id: 'elec', name: 'Electronics Fundamentals',
+    skills: [
+      { id: 'el.ohm',        name: "Ohm's law, power & budgets" },
+      { id: 'el.divider',    name: 'Voltage dividers & pull-ups' },
+      { id: 'el.rc',         name: 'RC filters & time constants' },
+      { id: 'el.diode',      name: 'Diodes & input protection' },
+      { id: 'el.transistor', name: 'Transistors & MOSFET switching' },
+      { id: 'el.opamp',      name: 'Op-amps & signal conditioning' },
+      { id: 'el.power',      name: 'Regulators: LDO vs switching' },
+      { id: 'el.decouple',   name: 'Decoupling & bypass capacitors' },
+      { id: 'el.scope',      name: 'Oscilloscope & multimeter technique' },
+      { id: 'el.noise',      name: 'Noise, grounding & EMI basics' },
+    ],
+  },
+  {
+    id: 'pcb', name: 'PCB Design',
+    skills: [
+      { id: 'pcb.schematic', name: 'Schematic capture & netlists' },
+      { id: 'pcb.symbols',   name: 'Symbols & footprint creation' },
+      { id: 'pcb.tools',     name: 'KiCad / Altium workflow' },
+      { id: 'pcb.stackup',   name: 'Layer stackup & planes' },
+      { id: 'pcb.route',     name: 'Routing, trace width & current' },
+      { id: 'pcb.ground',    name: 'Ground planes & return paths' },
+      { id: 'pcb.impedance', name: 'Controlled impedance & high-speed' },
+      { id: 'pcb.drc',       name: 'DRC/ERC & design rules' },
+      { id: 'pcb.gerber',    name: 'Gerbers, BOM & fab output' },
+      { id: 'pcb.dfm',       name: 'DFM/DFA & assembly constraints' },
+      { id: 'pcb.solder',    name: 'Soldering, rework & board bring-up' },
+    ],
+  },
+]
+
+// ── Tracks ────────────────────────────────────────────────────────
+// A track is a VIEW over the domains, not a separate store. Ratings are keyed
+// by skill id in one flat map, so a skill shared between tracks — CS
+// fundamentals, databases, Git — is rated once and counts everywhere. Switching
+// track therefore loses nothing, and needs no migration to add another one.
+export interface Track {
+  id: string
+  name: string
+  blurb: string
+  /** Domain ids, in display order. */
+  domains: string[]
+}
+
+export const TRACKS: Track[] = [
+  {
+    id: 'web', name: 'Web / Fullstack',
+    blurb: 'JavaScript, React, Node and the databases behind them',
+    domains: ['js', 'async', 'frontend', 'backend', 'db', 'cs', 'ops'],
+  },
+  {
+    id: 'ai', name: 'AI Engineering',
+    blurb: 'Python, ML foundations, deep learning and shipping LLM systems',
+    domains: ['py', 'ml', 'dl', 'llm', 'mlops', 'db', 'cs', 'ops'],
+  },
+  {
+    id: 'embedded', name: 'Embedded & PCB',
+    blurb: 'Firmware, microcontrollers, electronics and board design',
+    domains: ['ec', 'mcu', 'rtos', 'elec', 'pcb', 'cs'],
+  },
 ]
 
 // ── Role profiles ─────────────────────────────────────────────────
@@ -149,12 +340,14 @@ export const SKILL_DOMAINS: SkillDomain[] = [
 export interface RoleProfile {
   id: string
   name: string
+  /** Which track this role belongs to — see TRACKS. */
+  track: string
   requirements: Record<string, SkillLevel>
 }
 
 export const ROLE_PROFILES: RoleProfile[] = [
   {
-    id: 'frontend', name: 'Frontend Developer',
+    id: 'frontend', name: 'Frontend Developer', track: 'web',
     requirements: {
       'js.types': 3, 'js.closures': 3, 'js.this': 2, 'js.destructure': 3, 'js.modules': 3,
       'ts.basics': 3, 'ts.generics': 2,
@@ -167,7 +360,7 @@ export const ROLE_PROFILES: RoleProfile[] = [
     },
   },
   {
-    id: 'backend', name: 'Backend Developer (Node.js)',
+    id: 'backend', name: 'Backend Developer (Node.js)', track: 'web',
     requirements: {
       'js.types': 3, 'js.closures': 3, 'js.errors': 3, 'js.modules': 3,
       'ts.basics': 3, 'ts.generics': 2,
@@ -181,7 +374,7 @@ export const ROLE_PROFILES: RoleProfile[] = [
     },
   },
   {
-    id: 'fullstack', name: 'Fullstack Developer',
+    id: 'fullstack', name: 'Fullstack Developer', track: 'web',
     requirements: {
       'js.types': 3, 'js.closures': 3, 'js.this': 2, 'js.modules': 3, 'js.errors': 3,
       'ts.basics': 3,
@@ -197,9 +390,86 @@ export const ROLE_PROFILES: RoleProfile[] = [
       'ops.git': 3, 'ops.github': 2, 'ops.deploy': 2,
     },
   },
+
+  {
+    id: 'ai-llm', name: 'AI / LLM Engineer', track: 'ai',
+    requirements: {
+      'py.types': 3, 'py.functions': 3, 'py.typing': 2, 'py.venv': 3, 'py.async': 2, 'py.testing': 2,
+      'ml.supervised': 2, 'ml.metrics': 2, 'ml.split': 2,
+      'dl.transformer': 2, 'dl.pretrain': 2,
+      'llm.tokens': 3, 'llm.prompt': 3, 'llm.structured': 3, 'llm.embed': 3,
+      'llm.vector': 3, 'llm.rag': 3, 'llm.tools': 3, 'llm.agents': 2,
+      'llm.eval': 3, 'llm.guard': 3, 'llm.cost': 3, 'llm.choose': 3,
+      'mlops.serve': 2, 'mlops.docker': 2, 'mlops.monitor': 2,
+      'net.rest': 3, 'net.auth': 2, 'db.sql': 2, 'db.cache': 2,
+      'cs.bigo': 2, 'cs.hashmaps': 2,
+      'ops.git': 3, 'ops.deploy': 2, 'ops.envs': 2,
+    },
+  },
+  {
+    id: 'ai-ml', name: 'Machine Learning Engineer', track: 'ai',
+    requirements: {
+      'py.types': 3, 'py.functions': 3, 'py.typing': 2, 'py.venv': 3,
+      'py.numpy': 3, 'py.pandas': 3, 'py.testing': 2, 'py.notebooks': 3,
+      'ml.supervised': 3, 'ml.split': 3, 'ml.overfit': 3, 'ml.regularise': 3,
+      'ml.metrics': 3, 'ml.crossval': 3, 'ml.features': 3, 'ml.imbalance': 2,
+      'ml.linear': 3, 'ml.trees': 3, 'ml.cluster': 2,
+      'dl.tensors': 3, 'dl.autograd': 2, 'dl.optim': 2, 'dl.loss': 3,
+      'dl.torch': 3, 'dl.gpu': 2,
+      'mlops.track': 3, 'mlops.registry': 2, 'mlops.serve': 3,
+      'mlops.docker': 2, 'mlops.monitor': 3, 'mlops.pipeline': 2,
+      'db.sql': 3, 'cs.bigo': 2,
+      'ops.git': 3, 'ops.linux': 2, 'ops.deploy': 2,
+    },
+  },
+  {
+    id: 'emb-firmware', name: 'Embedded Firmware Engineer', track: 'embedded',
+    requirements: {
+      'ec.pointers': 3, 'ec.memory': 3, 'ec.bits': 3, 'ec.volatile': 3,
+      'ec.structs': 3, 'ec.stdint': 3, 'ec.linker': 2, 'ec.build': 3, 'ec.debug': 3,
+      'mcu.gpio': 3, 'mcu.interrupt': 3, 'mcu.timers': 3, 'mcu.adc': 3,
+      'mcu.uart': 3, 'mcu.i2c': 3, 'mcu.spi': 3, 'mcu.dma': 2,
+      'mcu.clock': 2, 'mcu.datasheet': 3, 'mcu.power': 2,
+      'rtos.tasks': 3, 'rtos.sync': 3, 'rtos.queue': 2, 'rtos.isr': 3,
+      'rtos.timing': 3, 'rtos.statemachine': 3, 'rtos.watchdog': 2, 'rtos.ota': 2,
+      'el.ohm': 2, 'el.divider': 2, 'el.scope': 3,
+      'cs.bigo': 2, 'cs.stackqueue': 2,
+    },
+  },
+  {
+    id: 'emb-hardware', name: 'Hardware / PCB Designer', track: 'embedded',
+    requirements: {
+      'el.ohm': 3, 'el.divider': 3, 'el.rc': 3, 'el.diode': 3,
+      'el.transistor': 3, 'el.opamp': 2, 'el.power': 3,
+      'el.decouple': 3, 'el.scope': 3, 'el.noise': 2,
+      'pcb.schematic': 3, 'pcb.symbols': 3, 'pcb.tools': 3, 'pcb.stackup': 2,
+      'pcb.route': 3, 'pcb.ground': 3, 'pcb.impedance': 2, 'pcb.drc': 3,
+      'pcb.gerber': 3, 'pcb.dfm': 2, 'pcb.solder': 3,
+      'mcu.datasheet': 3, 'mcu.gpio': 2, 'mcu.i2c': 2, 'mcu.spi': 2, 'mcu.power': 2,
+      'ec.stdint': 2,
+    },
+  },
 ]
 
 export const ALL_SKILLS_COUNT = SKILL_DOMAINS.reduce((n, d) => n + d.skills.length, 0)
+
+// ── Track helpers ─────────────────────────────────────────────────
+export function domainsForTrack(trackId: string): SkillDomain[] {
+  const track = TRACKS.find(t => t.id === trackId) ?? TRACKS[0]
+  // Ordered by the track, not by SKILL_DOMAINS, so each track reads in the
+  // sequence that makes sense for it.
+  return track.domains
+    .map(id => SKILL_DOMAINS.find(d => d.id === id))
+    .filter((d): d is SkillDomain => !!d)
+}
+
+export function rolesForTrack(trackId: string): RoleProfile[] {
+  return ROLE_PROFILES.filter(r => r.track === trackId)
+}
+
+export function trackSkillCount(trackId: string): number {
+  return domainsForTrack(trackId).reduce((n, d) => n + d.skills.length, 0)
+}
 
 export function roleReadiness(
   role: RoleProfile,

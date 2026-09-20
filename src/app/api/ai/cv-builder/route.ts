@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generate, AI_MODELS } from '@/lib/ai/client'
+import { generate, AI_MODELS, describeAiError } from '@/lib/ai/client'
 import { SYSTEM_PROMPTS } from '@/lib/ai/prompts'
 import { createSupabaseRouteHandlerClient } from '@/lib/supabase-server'
 
@@ -129,6 +129,6 @@ Now write the synthesized CV.`
 
   } catch (err) {
     console.error('[ai/cv-builder]', err)
-    return NextResponse.json({ error: 'Generation failed' }, { status: 500 })
+    return NextResponse.json({ error: describeAiError(err) }, { status: 500 })
   }
 }

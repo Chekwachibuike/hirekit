@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generate, parseJsonResponse, AI_MODELS } from '@/lib/ai/client'
+import { generate, parseJsonResponse, AI_MODELS, describeAiError } from '@/lib/ai/client'
 import { createSupabaseRouteHandlerClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
@@ -62,6 +62,6 @@ Rules:
     return NextResponse.json(parsed)
   } catch (err) {
     console.error('[ai/interview-prep]', err)
-    return NextResponse.json({ error: 'Generation failed' }, { status: 500 })
+    return NextResponse.json({ error: describeAiError(err) }, { status: 500 })
   }
 }

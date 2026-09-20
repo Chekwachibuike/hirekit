@@ -8,11 +8,15 @@ if (!process.env.GROQ_API_KEY) {
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
 
+// Groq retires models on its own schedule, and a retired id fails every AI
+// feature at once with a 404. The llama-3.1-8b-instant / llama-3.3-70b-versatile
+// pair that shipped here was decommissioned; these replaced them.
+// GET /api/ai/models lists what the current key can actually use.
 export const AI_MODELS = {
   // Fast + free tier — extraction, analysis, short tasks
-  flash: 'llama-3.1-8b-instant',
+  flash: 'openai/gpt-oss-20b',
   // High quality — cover letters, interview prep, project suggestions
-  pro: 'llama-3.3-70b-versatile',
+  pro: 'openai/gpt-oss-120b',
 } as const
 
 export type AiModel = (typeof AI_MODELS)[keyof typeof AI_MODELS]
@@ -50,6 +54,32 @@ export async function generate(
   })
 
   return completion.choices[0]?.message?.content ?? ''
+}
+
+/**
+ * Turns a provider error into something that names the actual problem.
+ *
+ * Every AI route used to answer "Generation failed" for any failure, which is
+ * indistinguishable between a retired model, a bad key and a rate limit — and
+ * sent the user hunting with nothing to go on.
+ */
+export function describeAiError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+
+  if (/model_not_found|does not exist|decommissioned|model_decommissioned/i.test(msg)) {
+    return 'The configured AI model is no longer available from Groq. ' +
+      'Open /api/ai/models to see what this key can use, then update AI_MODELS in src/lib/ai/client.ts.'
+  }
+  if (/rate.?limit|\b429\b/i.test(msg)) {
+    return 'Groq rate limit reached — wait a minute and try again.'
+  }
+  if (/\b401\b|invalid api key|unauthorized/i.test(msg)) {
+    return 'Groq rejected the API key — check GROQ_API_KEY in .env.local.'
+  }
+  if (/\b413\b|too large|context length/i.test(msg)) {
+    return 'The request was too large for the model — try with less input.'
+  }
+  return `AI request failed: ${msg}`
 }
 
 // Parses a JSON block out of an AI response that may wrap it in markdown fences

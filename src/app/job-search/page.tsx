@@ -9,6 +9,9 @@ import { fetcher } from '@/lib/fetcher'
 
 // Mirrors JobCard / JobDetail in src/lib/linkedin.ts (client copy — the lib
 // itself is server-only so we don't import from it here)
+type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok'
+type Eligibility = 'africa-ok' | 'restricted' | 'unknown'
+
 interface JobCard {
   id: string
   title: string
@@ -17,6 +20,24 @@ interface JobCard {
   location: string | null
   date: string | null
   url: string
+  source?: JobSourceId
+  /** Whether a Nigeria-based applicant may apply, per the board's own wording. */
+  eligibility?: Eligibility
+  eligibilityNote?: string | null
+}
+
+interface SourceOutcome {
+  source: JobSourceId
+  ok: boolean
+  count: number
+  error?: string
+}
+
+const SOURCE_LABELS: Record<JobSourceId, string> = {
+  linkedin: 'LinkedIn',
+  remotive: 'Remotive',
+  jobicy: 'Jobicy',
+  remoteok: 'RemoteOK',
 }
 interface JobDetail extends JobCard {
   description: string | null
@@ -70,6 +91,9 @@ export default function JobSearchPage() {
   const [location, setLocation] = useState('')
   const [remote, setRemote]     = useState<Remote>('')
   const [jobage, setJobage]     = useState(7)
+  const [africaOnly, setAfricaOnly] = useState(true)
+  const [sourceOutcomes, setSourceOutcomes] = useState<SourceOutcome[]>([])
+  const [eligibleCount, setEligibleCount]   = useState(0)
 
   // Results
   const [results, setResults]   = useState<JobCard[]>([])
@@ -97,6 +121,7 @@ export default function JobSearchPage() {
     if (location.trim()) params.set('location', location.trim())
     if (remote) params.set('remote', remote)
     if (jobage > 0) params.set('jobage', String(jobage))
+    if (africaOnly) params.set('africaOnly', '1')
     return params
   }
 
@@ -111,6 +136,8 @@ export default function JobSearchPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Search failed')
       setResults(json.data)
+      setSourceOutcomes(json.sources ?? [])
+      setEligibleCount(json.eligibleCount ?? 0)
       setSearched(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Search failed')
@@ -252,7 +279,56 @@ export default function JobSearchPage() {
           {searching ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={14} />}
           Search
         </button>
+
+        {/* Most remote listings name regions that exclude Africa, so this is
+            on by default — otherwise the majority of results are unusable. */}
+        <label
+          title="Only roles whose board says a Nigeria/Africa-based applicant may apply"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+            fontSize: 12, color: 'var(--c-text-muted)', userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={africaOnly}
+            onChange={e => setAfricaOnly(e.target.checked)}
+            style={{ accentColor: 'var(--c-teal)', width: 14, height: 14, cursor: 'pointer' }}
+          />
+          Open to Africa only
+        </label>
       </div>
+
+      {/* Which boards answered, and how many survived the eligibility filter */}
+      {searched && sourceOutcomes.length > 0 && (
+        <div style={{
+          margin: '10px 32px 0', display: 'flex', alignItems: 'center', gap: 10,
+          flexWrap: 'wrap', fontSize: 11, color: 'var(--c-text-dim)', flexShrink: 0,
+        }}>
+          {sourceOutcomes.map(o => (
+            <span
+              key={o.source}
+              title={o.ok ? `${o.count} result(s)` : `Unavailable: ${o.error ?? 'failed'}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 9px', borderRadius: 999,
+                background: 'var(--c-bg-2)', border: '1px solid var(--c-border)',
+                color: o.ok ? 'var(--c-text-muted)' : 'var(--c-red)',
+              }}
+            >
+              <span style={{
+                width: 5, height: 5, borderRadius: '50%',
+                background: o.ok ? 'var(--c-teal)' : 'var(--c-red)',
+              }} />
+              {SOURCE_LABELS[o.source]} {o.ok ? o.count : 'down'}
+            </span>
+          ))}
+          <span>
+            {eligibleCount} open to Africa
+            {!africaOnly && ' — tick the filter to show only those'}
+          </span>
+        </div>
+      )}
 
       {error && (
         <div style={{ margin: '12px 32px 0', fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0 }}>
@@ -329,6 +405,27 @@ export default function JobSearchPage() {
                       {matches.length > 0 && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 999, background: 'var(--c-violet-dim)', color: 'var(--c-violet)', fontWeight: 600, fontSize: 10, border: '1px solid rgba(124,92,252,0.15)' }}>
                           <Sparkles size={10} /> {matches.join(', ')}
+                        </span>
+                      )}
+                      {job.source && job.source !== 'linkedin' && (
+                        <span style={{ padding: '2px 8px', borderRadius: 999, background: 'var(--c-bg-4)', color: 'var(--c-text-dim)', fontWeight: 600, fontSize: 10 }}>
+                          {SOURCE_LABELS[job.source]}
+                        </span>
+                      )}
+                      {/* The board's own wording is the tooltip, so the user can
+                          second-guess the classification rather than trust it blindly. */}
+                      {job.eligibility === 'africa-ok' && (
+                        <span
+                          title={job.eligibilityNote ? `Board says: ${job.eligibilityNote}` : undefined}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 999, background: 'rgba(0,168,133,0.1)', color: 'var(--c-teal)', fontWeight: 600, fontSize: 10, border: '1px solid rgba(0,168,133,0.22)' }}>
+                          <Check size={10} /> Open to Africa
+                        </span>
+                      )}
+                      {job.eligibility === 'restricted' && (
+                        <span
+                          title={`Board says: ${job.eligibilityNote}`}
+                          style={{ padding: '2px 9px', borderRadius: 999, background: 'var(--c-red-dim)', color: 'var(--c-red)', fontWeight: 600, fontSize: 10 }}>
+                          Region-restricted
                         </span>
                       )}
                     </div>

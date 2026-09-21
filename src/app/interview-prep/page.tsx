@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
 import type { JobApplication } from '@/lib/supabase'
+import PracticeProgress from '@/components/PracticeProgress'
 
 // ── Types ─────────────────────────────────────────────────────────
 type MCQ      = { q: string; options: string[]; answer: number; explanation: string }
@@ -421,6 +422,12 @@ export default function InterviewPrepPage() {
       <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Interview Prep</h1>
         <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>15 MCQ questions · 5 written prompts with AI scoring · 3 LeetCode problems — tailored to any role</p>
+      </div>
+
+      {/* Progress — streak, this month's scores, and what to study next.
+          Sits above the practice itself so the history frames the session. */}
+      <div style={{ padding: '16px 32px 0', flexShrink: 0 }}>
+        <PracticeProgress />
       </div>
 
       {/* Role input */}

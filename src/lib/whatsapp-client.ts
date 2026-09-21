@@ -112,7 +112,10 @@ async function reapStaleSession(): Promise<void> {
   try {
     const { rm } = await import('fs/promises')
     const path = await import('path')
-    for (const f of ['DevToolsActivePort', 'SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    // 'lockfile' is the one Edge actually leaves behind on Windows — it was
+    // sitting in a stuck profile while only the POSIX-style Singleton* names
+    // were being cleared.
+    for (const f of ['DevToolsActivePort', 'lockfile', 'SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
       await rm(path.join(dir, f), { force: true })
     }
   } catch { /* profile may not exist yet on first connect */ }
@@ -284,6 +287,12 @@ export async function initWaClient() {
     // Kill the half-started browser, or it keeps the session locked and the
     // NEXT connect attempt fails with "browser is already running".
     try { await client.destroy() } catch { /* browser may never have started */ }
+    // destroy() cannot clean up a browser it never managed to attach to, and
+    // that is exactly the case here: a failed launch leaves the Edge tree
+    // holding the profile, so the next attempt sees it "already running" and
+    // Chromium exits 0 with no stderr — the least diagnosable failure there
+    // is. Reaping on the way out stops one bad launch poisoning the next.
+    await reapStaleSession()
   })
   globalThis._waClient = client
 }

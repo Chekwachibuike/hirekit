@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- HireKit app icon. Brand gradient from tokens.css (--c-violet to --c-coral).
+     The mark is optically centred: the handle adds weight on top, so the group
+     sits 8px above geometric centre. Check weight is set for 16px legibility. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C5CFC"/>
+      <stop offset="1" stop-color="#F4633A"/>
+    </linearGradient>
+
+    <mask id="cut">
+      <rect x="96" y="178" width="320" height="214" rx="34" fill="#fff"/>
+      <path d="M 194 286 L 238 330 L 322 246"
+            fill="none" stroke="#000" stroke-width="46"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+
+  <path d="M 186 178 V 142 a 26 26 0 0 1 26 -26 h 88 a 26 26 0 0 1 26 26 v 36"
+        fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round"/>
+
+  <rect x="96" y="178" width="320" height="214" rx="34" fill="#fff" mask="url(#cut)"/>
+</svg>

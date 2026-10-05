@@ -116,16 +116,21 @@ $inc2 = Join-Path $sdkDir "build\native\include"
 $out  = Join-Path $root "HireKit.exe"
 
 Push-Location $desktop
+# Icon + version info. Without this the exe gets the generic Windows icon in
+# Explorer, the taskbar and Alt-Tab, whatever the app shows in its own window.
+windres hirekit.rc -o hirekit-res.o
+if (-not $?) { Pop-Location; throw "windres failed to compile hirekit.rc" }
+
 gcc -c hirekit.c -o hirekit.o -O2 "-I$inc1" "-I$inc2"
 if (-not $?) { Pop-Location; throw "hirekit.c failed to compile" }
 gcc -c update.c -o update.o -O2 "-I$inc1" "-I$inc2"
 if (-not $?) { Pop-Location; throw "update.c failed to compile" }
 g++ -c webview_impl.cc -o webview_impl.o -O2 -std=c++14 "-I$inc1" "-I$inc2"
 if (-not $?) { Pop-Location; throw "webview_impl.cc failed to compile" }
-g++ hirekit.o webview_impl.o update.o -o $out -O2 -static -mwindows `
+g++ hirekit.o webview_impl.o update.o hirekit-res.o -o $out -O2 -static -mwindows `
   -ladvapi32 -lole32 -lshell32 -lshlwapi -luser32 -lversion -lws2_32 -lwinhttp -lbcrypt
 if (-not $?) { Pop-Location; throw "link failed" }
-Remove-Item hirekit.o, webview_impl.o, update.o -ErrorAction SilentlyContinue
+Remove-Item hirekit.o, webview_impl.o, update.o, hirekit-res.o -ErrorAction SilentlyContinue
 Pop-Location
 
 $size = [math]::Round((Get-Item $out).Length / 1MB, 2)

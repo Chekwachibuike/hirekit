@@ -1,0 +1,28 @@
+/* Windows resources for HireKit.exe. Compiled by windres in build.ps1.
+   Icon id 1: Explorer and the taskbar use the lowest-numbered icon. */
+1 ICON "hirekit.ico"
+
+1 VERSIONINFO
+FILEVERSION     0,1,0,0
+PRODUCTVERSION  0,1,0,0
+FILEOS          0x4L
+FILETYPE        0x1L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName",      "Chekwachibuike"
+      VALUE "FileDescription",  "HireKit"
+      VALUE "FileVersion",      "0.1.0"
+      VALUE "InternalName",     "HireKit"
+      VALUE "OriginalFilename", "HireKit.exe"
+      VALUE "ProductName",      "HireKit"
+      VALUE "ProductVersion",   "0.1.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

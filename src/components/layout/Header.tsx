@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, Sun, Moon, Monitor, LogOut } from 'lucide-react'
+import { BriefcaseBusiness, Sun, Moon, Monitor, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/useTheme'
 import NotificationBell from './NotificationBell'
@@ -80,7 +80,8 @@ export default function Header() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: 'var(--shadow-accent)',
         }}>
-          <Sparkles size={16} color="#fff" fill="#fff" strokeWidth={2} />
+          {/* Matches the app icon (design/icon.svg) and the loader mark. */}
+          <BriefcaseBusiness size={17} color="#fff" strokeWidth={2.3} />
         </div>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-chrome-text)', letterSpacing: '-0.03em', lineHeight: 1, fontFamily: 'var(--font-display)' }}>HireKit</div>

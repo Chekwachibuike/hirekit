@@ -6,6 +6,7 @@ import {
   LayoutDashboard, FileText, Briefcase, Mail,
   FolderKanban, Settings, ExternalLink,
   BrainCircuit, Calendar, Search, MessageSquare, UserCircle, ClipboardCheck,
+  Globe, Plus,
 } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
 
@@ -78,6 +79,57 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
   )
 }
 
+function PortfolioLink() {
+  const { data } = useSWR<{ data: { portfolio_url?: string } | null }>('/api/personal-info', fetcher)
+  const raw = data?.data?.portfolio_url?.trim()
+  // Accept "mysite.com" as well as a full URL — people type it either way.
+  const url = raw ? (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`) : null
+
+  const base: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 9,
+    padding: '10px 12px', borderRadius: 'var(--r-md)',
+    fontSize: 12.5, fontWeight: 600,
+    textDecoration: 'none', transition: 'all 0.15s',
+  }
+
+  if (!url) {
+    return (
+      <Link
+        href="/personal-info"
+        title="Add your portfolio URL in Personal Info"
+        style={{
+          ...base,
+          background: 'var(--c-chrome-hover)',
+          border: '1px dashed var(--c-chrome-border)',
+          color: 'var(--c-chrome-muted)',
+        }}
+      >
+        <Globe size={13} />
+        Portfolio not set up
+        <Plus size={13} style={{ marginLeft: 'auto' }} />
+      </Link>
+    )
+  }
+
+  return (
+    <a
+      href={url} target="_blank" rel="noopener noreferrer"
+      title={url}
+      style={{
+        ...base,
+        background: 'var(--c-teal-dim)',
+        border: '1px solid color-mix(in srgb, var(--c-teal) 22%, transparent)',
+        color: 'var(--c-teal)',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.boxShadow = 'var(--shadow-sm)')}
+      onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
+    >
+      <ExternalLink size={13} />
+      View Portfolio
+    </a>
+  )
+}
+
 function SectionLabel({ label }: { label: string }) {
   return (
     <div style={{
@@ -117,27 +169,11 @@ export default function Sidebar() {
         {NAV_AI.filter(available).map(item => <NavItem key={item.href} {...item} />)}
       </nav>
 
-      {/* Portfolio link */}
+      {/* Portfolio link — the user's own URL from Personal Info. It used to be
+          hardcoded to localhost:3001 with a permanent "LIVE" badge, which was
+          wrong for everyone and dishonest when nothing was set. */}
       <div style={{ padding: '10px 12px 6px' }}>
-        <a href="http://localhost:3001" target="_blank" rel="noopener noreferrer" style={{
-          display: 'flex', alignItems: 'center', gap: 9,
-          padding: '10px 12px', borderRadius: 'var(--r-md)',
-          background: 'var(--c-teal-dim)',
-          border: '1px solid color-mix(in srgb, var(--c-teal) 22%, transparent)',
-          color: 'var(--c-teal)', fontSize: 12.5, fontWeight: 600,
-          textDecoration: 'none', transition: 'all 0.15s',
-        }}
-          onMouseEnter={(e) => (e.currentTarget.style.boxShadow = 'var(--shadow-sm)')}
-          onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
-        >
-          <ExternalLink size={13} />
-          View Portfolio
-          <span style={{
-            marginLeft: 'auto', fontSize: 9.5, fontWeight: 700, padding: '2px 7px',
-            background: 'color-mix(in srgb, var(--c-teal) 16%, transparent)',
-            borderRadius: 999, letterSpacing: '0.04em',
-          }}>LIVE</span>
-        </a>
+        <PortfolioLink />
       </div>
 
       {/* Settings */}

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import {
   BrainCircuit, Loader2, Zap, CheckCircle2, XCircle,
-  PenLine, Code2, ChevronDown, ChevronUp, ExternalLink, Trophy,
+  PenLine, Code2, ChevronDown, ChevronUp, ExternalLink, Trophy, Lightbulb,
 } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
 import type { JobApplication } from '@/lib/supabase'
@@ -13,7 +13,13 @@ import PracticeProgress from '@/components/PracticeProgress'
 type MCQ      = { q: string; options: string[]; answer: number; explanation: string }
 type WrittenQ = { q: string; hint: string }
 type LeetQ    = { title: string; difficulty: 'Easy' | 'Medium' | 'Hard'; topic: string; description: string; examples: string[]; constraints: string[] }
-type Tab      = 'mcq' | 'written' | 'leetcode'
+type Tab      = 'mcq' | 'written' | 'leetcode' | 'projects'
+type Suggestion = {
+  title: string; description: string; tech_stack: string[]
+  gap_closed: string; target_role_alignment: string
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  estimated_days: number; portfolio_pitch: string
+}
 interface Questions { mcq: MCQ[]; written: WrittenQ[]; leetcode: LeetQ[] }
 interface Rating    { score: number; feedback: string; model_answer: string }
 
@@ -324,6 +330,139 @@ function LeetCodeSection({ questions, role }: { questions: LeetQ[]; role: string
   )
 }
 
+// ── Project suggester ─────────────────────────────────────────────
+// Reads the candidate's CV and an optional job description, and proposes
+// projects that close the gap between them. Paste a JD and the gaps become
+// specific to that posting rather than to the role title in general.
+const DIFF_TONE = {
+  beginner:     { bg: 'rgba(0,168,133,0.1)',  fg: '#00A885' },
+  intermediate: { bg: 'rgba(212,160,23,0.1)', fg: '#D4A017' },
+  advanced:     { bg: 'rgba(224,50,85,0.1)',  fg: '#E03255' },
+} as const
+
+function ProjectsSection({
+  role, jobDesc, setJobDesc, suggestions, loading, error, onSuggest,
+}: {
+  role: string
+  jobDesc: string
+  setJobDesc: (v: string) => void
+  suggestions: Suggestion[] | null
+  loading: boolean
+  error: string | null
+  onSuggest: () => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 820 }}>
+      <div>
+        <p style={{ fontSize: 13, color: 'var(--c-text-muted)', lineHeight: 1.7, margin: 0 }}>
+          Compares your CV against <strong style={{ color: 'var(--c-text)' }}>{role || 'the target role'}</strong> and
+          suggests projects that evidence what you cannot yet prove. Paste the job
+          description to make the gaps specific to that posting.
+        </p>
+      </div>
+
+      <textarea
+        value={jobDesc}
+        onChange={e => setJobDesc(e.target.value)}
+        placeholder="Paste the job description here (optional, but makes the suggestions far sharper)"
+        rows={6}
+        disabled={loading}
+        style={{
+          width: '100%', padding: 12, fontSize: 13, lineHeight: 1.6,
+          borderRadius: 'var(--r-md)', border: '1px solid var(--c-border)',
+          background: 'var(--c-bg-3)', color: 'var(--c-text)',
+          resize: 'vertical', fontFamily: 'inherit',
+        }}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={onSuggest}
+          disabled={loading || !role.trim()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '9px 16px', borderRadius: 'var(--r-md)', border: 'none',
+            background: loading || !role.trim() ? 'var(--c-bg-4)' : 'var(--c-violet)',
+            color: loading || !role.trim() ? 'var(--c-text-muted)' : '#fff',
+            fontSize: 13, fontWeight: 600,
+            cursor: loading || !role.trim() ? 'not-allowed' : 'pointer',
+            fontFamily: 'var(--font-body)',
+          }}>
+          {loading
+            ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Reading your CV…</>
+            : <><Lightbulb size={13} /> {suggestions ? 'Suggest again' : 'Suggest projects'}</>}
+        </button>
+        {jobDesc.trim() && (
+          <span style={{ fontSize: 11, color: 'var(--c-text-dim)' }}>
+            {jobDesc.trim().length} characters of job description
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      {suggestions?.length === 0 && !loading && (
+        <p style={{ fontSize: 13, color: 'var(--c-text-muted)' }}>
+          No gaps found worth a new project — your CV already covers this role.
+        </p>
+      )}
+
+      {suggestions?.map((p, i) => {
+        const tone = DIFF_TONE[p.difficulty] ?? DIFF_TONE.intermediate
+        return (
+          <article key={`${p.title}-${i}`} style={{
+            border: '1px solid var(--c-border)', borderRadius: 'var(--r-lg)',
+            background: 'var(--c-bg-3)', padding: 18,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--c-text)' }}>{p.title}</h3>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: tone.bg, color: tone.fg, textTransform: 'capitalize' }}>
+                  {p.difficulty}
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: 'var(--c-bg-4)', color: 'var(--c-text-dim)' }}>
+                  ~{p.estimated_days}d
+                </span>
+              </div>
+            </div>
+
+            <p style={{ margin: '10px 0 0', fontSize: 13, lineHeight: 1.7, color: 'var(--c-text-muted)' }}>
+              {p.description}
+            </p>
+
+            {p.gap_closed && (
+              <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 'var(--r-md)', background: 'var(--c-violet-dim)', border: '1px solid rgba(124,92,252,0.2)' }}>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-violet)' }}>Closes this gap</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--c-text)' }}>{p.gap_closed}</p>
+              </div>
+            )}
+
+            {p.portfolio_pitch && (
+              <p style={{ margin: '12px 0 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--c-text-muted)', fontStyle: 'italic' }}>
+                &ldquo;{p.portfolio_pitch}&rdquo;
+              </p>
+            )}
+
+            {p.tech_stack?.length > 0 && (
+              <ul style={{ display: 'flex', flexWrap: 'wrap', gap: 6, listStyle: 'none', padding: 0, margin: '12px 0 0' }}>
+                {p.tech_stack.map(t => (
+                  <li key={t} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 999, background: 'var(--c-bg-4)', color: 'var(--c-text-muted)', border: '1px solid var(--c-border)' }}>
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
 function EmptyState() {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--c-text-dim)', padding: '48px 24px', textAlign: 'center' }}>
@@ -355,6 +494,12 @@ export default function InterviewPrepPage() {
   const [writtenAnswers, setWrittenAnswers] = useState<string[]>([])
   const [ratings, setRatings]   = useState<(Rating | null)[]>([])
   const [ratingIdx, setRatingIdx] = useState<number | null>(null)
+
+  // Project suggester: reads the CV and, when given one, the job description.
+  const [jobDesc, setJobDesc]         = useState('')
+  const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null)
+  const [suggesting, setSuggesting]   = useState(false)
+  const [suggestError, setSuggestError] = useState<string | null>(null)
 
   // Prefill role from ?role= (used by Skills Audit's "practice these gaps").
   // window.location.search instead of useSearchParams() so the page keeps
@@ -409,10 +554,31 @@ export default function InterviewPrepPage() {
     finally { setRatingIdx(null) }
   }
 
+  async function suggestProjects() {
+    if (!role.trim()) return
+    setSuggesting(true)
+    setSuggestError(null)
+    try {
+      const res = await fetch('/api/ai/project-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: role.trim(), job_description: jobDesc.trim() || undefined }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Could not suggest projects')
+      setSuggestions(json.suggestions ?? [])
+    } catch (e: unknown) {
+      setSuggestError(e instanceof Error ? e.message : 'Could not suggest projects')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   const tabs = questions ? [
     { key: 'mcq'      as const, label: 'Objective',  icon: CheckCircle2, count: questions.mcq.length },
     { key: 'written'  as const, label: 'Written',    icon: PenLine,      count: questions.written.length },
     { key: 'leetcode' as const, label: 'LeetCode',   icon: Code2,        count: questions.leetcode.length },
+    { key: 'projects' as const, label: 'Projects',   icon: Lightbulb,    count: suggestions?.length ?? 0 },
   ] : []
 
   return (
@@ -542,6 +708,17 @@ export default function InterviewPrepPage() {
               )}
               {tab === 'leetcode' && (
                 <LeetCodeSection questions={questions.leetcode} role={role} />
+              )}
+              {tab === 'projects' && (
+                <ProjectsSection
+                  role={role}
+                  jobDesc={jobDesc}
+                  setJobDesc={setJobDesc}
+                  suggestions={suggestions}
+                  loading={suggesting}
+                  error={suggestError}
+                  onSuggest={suggestProjects}
+                />
               )}
             </div>
           </>

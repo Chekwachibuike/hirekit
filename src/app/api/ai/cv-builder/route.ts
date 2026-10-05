@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     // Fetch personal info + all CV versions in parallel
     const [{ data: info }, { data: versions }] = await Promise.all([
       supabase.from('personal_info').select('*').eq('user_id', user.id).single(),
-      supabase.from('cv_versions').select('label, cv_markdown').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('cv_versions').select('label, cv_markdown').eq('user_id', user.id).order('created_at', { ascending: false }).limit(8),
     ])
 
     if (!info && (!versions || versions.length === 0)) {
@@ -29,18 +29,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Build the source material block ─────────────────────────
+    // The profile leads and is marked authoritative. Old CVs carry stale
+    // contact details, titles and locations, and with every source presented
+    // as an equal "past CV" the model chose between them arbitrarily, so a
+    // superseded phone number or city could survive into the curated CV.
     const cvSources: string[] = []
 
-    // Add each uploaded CV version as a named source
-    if (versions && versions.length > 0) {
-      versions.forEach((v, i) => {
-        if (v.cv_markdown?.trim()) {
-          cvSources.push(`=== SOURCE CV ${i + 1}: "${v.label}" ===\n${v.cv_markdown.trim()}`)
-        }
-      })
-    }
-
-    // Also synthesize from structured personal_info as an additional source
     if (info) {
       const skillsList = Array.isArray(info.skills) ? info.skills.join(', ') : ''
 
@@ -70,8 +64,20 @@ export async function POST(req: NextRequest) {
         eduBlock      ? `\nEducation:\n${eduBlock}`     : '',
       ].filter(Boolean).join('\n')
 
-      cvSources.push(`=== SOURCE: PROFILE DATABASE ===\n${profileSource}`)
+      cvSources.push(
+        `=== AUTHORITATIVE PROFILE (confirmed by the candidate, overrides every CV below) ===\n${profileSource}`,
+      )
     }
+
+    // Generated CVs are saved back into cv_versions, so including them feeds
+    // this prompt its own previous output; over a few runs the real history
+    // thins into a restatement of a restatement.
+    const uploaded = (versions ?? []).filter(
+      v => v.cv_markdown?.trim() && !/AI curated|AI synthesi[sz]ed/i.test(v.label ?? ''),
+    )
+    uploaded.forEach((v, i) => {
+      cvSources.push(`=== SOURCE CV ${i + 1}: "${v.label}" ===\n${v.cv_markdown!.trim()}`)
+    })
 
     if (cvSources.length === 0) {
       return NextResponse.json({ error: 'No usable CV content found.' }, { status: 404 })
@@ -104,7 +110,7 @@ Now write the synthesized CV.`
 
     const cv_markdown = await generate(prompt, {
       model: AI_MODELS.pro,
-      systemPrompt: isRoleTargeted ? SYSTEM_PROMPTS.cvCuration : `You are a professional CV writer. Synthesize the provided source CVs into one clean, ATS-compliant Markdown CV. Use the same structural rules as the cvCuration prompt. Output ONLY the Markdown CV.`,
+      systemPrompt: isRoleTargeted ? SYSTEM_PROMPTS.cvCuration : `You are a professional CV writer. Synthesize the provided sources into one clean, ATS-compliant Markdown CV. The AUTHORITATIVE PROFILE block is the candidate's current truth: wherever a past CV disagrees with it on a fact (name, email, phone, location, links, titles, employers, dates, education), the profile wins and the CV's version is discarded. Past CVs supply achievements and detail only. Use the same structural rules as the cvCuration prompt. Output ONLY the Markdown CV.`,
       temperature: 0.2,
       // Headroom for a two-page senior / engineering CV (~900 words + markdown)
       // without truncation; concise one-pagers still stop early on their own.

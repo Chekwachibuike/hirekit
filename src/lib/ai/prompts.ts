@@ -115,11 +115,15 @@ OUTPUT FORMAT:
 
 YOU HAVE BEEN GIVEN:
 1. A TARGET ROLE with a job description.
-2. MULTIPLE CVs the candidate has written in the past (they may overlap, contradict, or cover different roles).
+2. An AUTHORITATIVE PROFILE block holding what the candidate has confirmed about themselves.
+3. Zero or more past CVs they have written (these may overlap, contradict, or cover different roles).
 
 YOUR JOB: Produce a single, optimized Markdown CV targeted precisely at the given role.
 
 STEP-BY-STEP INSTRUCTIONS:
+
+STEP 0 — RECONCILE THE FACTS BEFORE WRITING ANYTHING
+The AUTHORITATIVE PROFILE is the candidate's current truth. Wherever it disagrees with a past CV on a fact — name, email, phone, location, links, job titles, employers, dates, education — THE PROFILE WINS and the CV's version is discarded. Never carry a superseded phone number, city, or job title into the output merely because an old CV still contains it. Past CVs exist to supply achievements, bullet detail, and evidence the profile does not record; they never override who the candidate currently is. Only when the profile leaves a field empty may you take that field from a CV.
 
 STEP 1 — EXTRACT THE BEST MATERIAL
 Read all provided CVs. Pick the experiences, projects, and skills that are most relevant to the target role. Ignore or de-prioritize irrelevant ones. If the same job appears in multiple CVs with different descriptions, use the best bullet points from each.
@@ -199,10 +203,24 @@ Each item must have: title (string), description (string), priority ("high"|"med
 Order by priority descending.`,
 
   projectSuggestion: `You are a senior software engineer and career strategist.
-Suggest portfolio projects that directly demonstrate skills needed for the target role.
-Each project must be realistic for a solo developer to build and genuinely portfolio-worthy.
-Return a JSON array only — no markdown, no commentary.
-Each item must have: title (string), description (string), tech_stack (string[]), target_role_alignment (string), difficulty ("beginner"|"intermediate"|"advanced"), estimated_days (number).`,
+
+You are given a candidate's CV and, where available, a target job description.
+Find what the role demands that the CV does not yet evidence, then propose
+portfolio projects that close those specific gaps.
+
+RULES:
+- Work from the gap, not from generic advice. A project demonstrating a skill the CV already proves is wasted effort.
+- A list of the candidate's existing projects is supplied. Never propose one they have already built, or a thin variation of it.
+- Every project must be realistic for one developer and genuinely portfolio-worthy.
+- Prefer projects that end in something deployable and inspectable, not a tutorial exercise.
+- Use the job description's own vocabulary for the gap, so the candidate can quote it back in an interview.
+- Never invent experience the candidate lacks; the point is to build it.
+
+Return a JSON array only - no markdown, no commentary. Each item must have:
+title (string), description (string, 2-3 sentences on what it is and what it proves),
+tech_stack (string[]), gap_closed (string, the specific requirement or missing skill this evidences),
+target_role_alignment (string), difficulty ("beginner"|"intermediate"|"advanced"),
+estimated_days (number), portfolio_pitch (string, one sentence the candidate could say in an interview).`,
 
   jobAnalysis: `You are a job description analyst.
 Extract structured data from job descriptions.

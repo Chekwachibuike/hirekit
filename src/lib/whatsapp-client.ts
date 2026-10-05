@@ -27,16 +27,9 @@ declare global {
 // LocalAuth stores its Chromium profile at <cwd>/.wwebjs_auth/session-<clientId>.
 // Derived from cwd rather than hardcoded because cwd differs between `next dev`
 // (project root) and the desktop build (.next/standalone).
-// The session lives in LOCALAPPDATA, not under the app directory. LocalAuth's
-// default is <cwd>/.wwebjs_auth, and the desktop server's cwd is
-// .next\standalone -- which `next build` deletes and recreates, so every
-// rebuild silently logged the user out and demanded a fresh QR scan. A payload
-// update would have done the same. Keeping it in the user's own data directory
-// makes it survive builds, updates and reinstalls, and makes the path identical
-// in dev and in the desktop build instead of depending on cwd.
-//
-// path.join (not string concat) because the reaper matches this against the
-// browser's command line, which uses native backslashes on Windows.
+// Session lives in LOCALAPPDATA, not under the app directory, so builds and
+// updates cannot wipe it. path.join because the reaper matches this against
+// the browser's command line (native backslashes).
 const WA_CLIENT_ID = 'hirekit'
 
 async function dataRoot() {
@@ -51,18 +44,10 @@ async function sessionDir() {
 }
 
 // ── Stale-session reaper ──────────────────────────────────────────
-// Chromium refuses to open a profile that a live browser still holds, and it
-// is our GRANDchild (node -> chromium), so it only dies when something kills
-// the whole tree. The desktop shell's Job Object does that when the window
-// closes, but not when node itself crashes or is force-killed, and `npm run
-// dev` has no job object at all. Either way the browser survives holding the
-// profile, and every later Connect fails with "browser is already running".
-//
-// initWaClient() returns early when a client already exists, so by the time we
-// reach here this process has no live browser of its own: anything still
-// holding OUR profile path is stale by definition, and safe to terminate.
-// Matching on the profile path is what keeps this from touching the user's
-// real browser windows.
+// A crashed or force-killed run leaves Chromium holding the profile, and every
+// later Connect then fails. initWaClient() returns early when a client exists,
+// so anything holding OUR profile path here is stale by definition. Matching on
+// that path keeps this off the user's real browser windows.
 const REAP_SCRIPT = `
 $p = $env:HK_WA_PROFILE
 $all = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
@@ -88,9 +73,7 @@ async function reapStaleSession(): Promise<void> {
       const { execFile } = await import('child_process')
       const { promisify } = await import('util')
       const run = promisify(execFile)
-      // -EncodedCommand (UTF-16LE base64) instead of -Command: PowerShell
-      // re-parses a -Command string, which mangles any quoting inside the
-      // script. Encoding hands it over verbatim.
+      // -EncodedCommand: -Command re-parses and mangles the script's quoting.
       const encoded = Buffer.from(REAP_SCRIPT, 'utf16le').toString('base64')
       const { stdout } = await run(
         'powershell',
@@ -106,24 +89,19 @@ async function reapStaleSession(): Promise<void> {
     }
   }
 
-  // Chromium leaves these behind when it dies abruptly; a stale one makes the
-  // next launch think another instance owns the profile. Safe to remove now
-  // that no process is holding the directory.
+  // Stale locks from an abrupt exit; nothing holds the dir now.
   try {
     const { rm } = await import('fs/promises')
     const path = await import('path')
-    // 'lockfile' is the one Edge actually leaves behind on Windows — it was
-    // sitting in a stuck profile while only the POSIX-style Singleton* names
-    // were being cleared.
+    // 'lockfile' is the one Edge leaves on Windows; Singleton* are POSIX.
     for (const f of ['DevToolsActivePort', 'lockfile', 'SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
       await rm(path.join(dir, f), { force: true })
     }
   } catch { /* profile may not exist yet on first connect */ }
 }
 
-// Destroy the client on normal shutdown so the browser goes with us. This is
-// tidiness, not the guarantee — 'exit' cannot await, and a force-kill runs no
-// handler at all. reapStaleSession() is what actually makes reconnect reliable.
+// Tidiness only — 'exit' cannot await and a force-kill runs no handler.
+// reapStaleSession() is the actual guarantee.
 function registerShutdownHooks() {
   if (globalThis._waHooked) return
   globalThis._waHooked = true
@@ -287,11 +265,8 @@ export async function initWaClient() {
     // Kill the half-started browser, or it keeps the session locked and the
     // NEXT connect attempt fails with "browser is already running".
     try { await client.destroy() } catch { /* browser may never have started */ }
-    // destroy() cannot clean up a browser it never managed to attach to, and
-    // that is exactly the case here: a failed launch leaves the Edge tree
-    // holding the profile, so the next attempt sees it "already running" and
-    // Chromium exits 0 with no stderr — the least diagnosable failure there
-    // is. Reaping on the way out stops one bad launch poisoning the next.
+    // destroy() cannot clean up a browser it never attached to, so reap again:
+    // otherwise one failed launch poisons every attempt after it.
     await reapStaleSession()
   })
   globalThis._waClient = client

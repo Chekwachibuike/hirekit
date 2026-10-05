@@ -1,10 +1,6 @@
-// Shared RRULE handling. Lives here rather than in the calendar page because
-// the notification feed has to expand the same repeats to know what is coming
-// up — two copies of this logic would drift apart immediately.
-//
-// A deliberately small subset: exactly the patterns the event modal can
-// produce. A general RRULE engine would dwarf the UI that needs it, and the
-// stored value goes to Google untouched, where the full spec is honoured.
+// Shared RRULE handling — the calendar and the notification feed expand the
+// same repeats. Covers only the patterns the event modal produces; the stored
+// value goes to Google untouched, where the full spec applies.
 
 export function toISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

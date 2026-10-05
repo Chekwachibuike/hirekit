@@ -1,22 +1,37 @@
-// Extra job sources for the search pool, alongside the LinkedIn scraper.
-//
-// Chosen because each is a curated board with a public JSON API — human-posted
-// listings from named companies, not a scraper aggregating other scrapers. The
-// deciding factor was that Remotive and Jobicy publish WHO MAY APPLY as a
-// field, which is what makes "can a Nigerian actually take this job?" an
-// answerable question rather than a guess:
-//
-//   Remotive  candidate_required_location  "Worldwide" | "USA, Canada" | "Europe"
-//   Jobicy    jobGeo                       "Anywhere"  | "USA" | "EMEA"
-//   RemoteOK  location                     often blank, sometimes a country
-//
-// That matters more than it sounds. A sample of Remotive's "developer" results
-// was 6 "Worldwide" out of 18 — the rest listed regions like "Northern America,
-// LATAM, Europe, APAC", which quietly excludes Africa. Showing those unfiltered
-// would mean most results are jobs the user cannot apply for.
+// Remote job boards with public JSON APIs. Remotive and Jobicy publish who may
+// apply (candidate_required_location / jobGeo), which is what makes the
+// Africa-eligibility filter possible. See docs/internal/decisions.md.
 //
 // Server-side only: called from API routes, never a Client Component.
-import type { JobCard } from './linkedin'
+
+// Defined here, not in the optional LinkedIn adapter, so nothing depends on a
+// module that may be absent.
+export interface JobCard {
+  id: string
+  title: string
+  company: string | null
+  companyUrl: string | null
+  location: string | null
+  date: string | null
+  url: string
+}
+
+export interface JobDetail extends JobCard {
+  description: string | null
+  seniority: string | null
+  employmentType: string | null
+  jobFunction: string | null
+  industries: string | null
+  applyUrl: string | null
+}
+
+export interface JobSearchOptions {
+  query?: string
+  location?: string
+  jobage?: number
+  remote?: 'remote' | 'hybrid' | 'onsite'
+  page?: number
+}
 
 export type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok'
 
@@ -45,13 +60,8 @@ const HEADERS = { 'User-Agent': UA, Accept: 'application/json' }
 const OPEN_TO_AFRICA = /\b(africa|african|nigeria|nigerian|kenya|ghana|egypt|emea)\b/i
 const OPEN_TO_ANYONE = /\b(worldwide|anywhere|global|international|any location|remote, world)\b/i
 
-/**
- * Reads a board's location string and decides whether Africa is included.
- *
- * Deliberately conservative: anything that names specific regions without
- * Africa among them is treated as restricted, because the failure that matters
- * is wasting an application, not missing a borderline listing.
- */
+/** Whether a board's location string includes Africa. Conservative: named
+ *  regions without Africa count as restricted. */
 export function classifyEligibility(raw?: string | null): { level: Eligibility; note: string | null } {
   const s = (raw ?? '').trim()
   if (!s) return { level: 'unknown', note: null }
@@ -71,7 +81,7 @@ function stripHtml(s?: string | null): string | null {
   return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || null
 }
 
-/** Per-source timeout, so one slow board cannot hold up the whole search. */
+/** Per-source timeout so one slow board cannot stall the search. */
 async function getJson(url: string, ms = 9000): Promise<unknown> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), ms)
@@ -151,16 +161,14 @@ interface RemoteOkJob {
 }
 
 async function fromRemoteOk(query: string): Promise<SourcedJob[]> {
-  // Returns the whole board and has no search parameter, so filtering is ours
-  // to do. Element 0 is a legal notice, not a job.
+  // No search param: returns the whole board. Element 0 is a legal notice.
   const all = await getJson('https://remoteok.com/api') as RemoteOkJob[]
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
 
   return (Array.isArray(all) ? all.slice(1) : [])
     .filter(j => {
+      // Any term, not all; filterRelevant tightens this afterwards.
       const hay = `${j.position ?? ''} ${j.company ?? ''} ${(j.tags ?? []).join(' ')}`.toLowerCase()
-      // Any term, not all: "react developer" should still find a role titled
-      // "Frontend Engineer" tagged react. filterRelevant tightens this after.
       return terms.some(t => hay.includes(t))
     })
     .slice(0, 50)
@@ -196,11 +204,7 @@ export interface SourceOutcome {
   error?: string
 }
 
-/**
- * Queries the remote boards in parallel. Failures are isolated and reported
- * rather than thrown: one board being down should narrow the results, not
- * break the search.
- */
+/** Queries the boards in parallel; failures are isolated and reported. */
 export async function searchRemoteBoards(
   query: string,
 ): Promise<{ jobs: SourcedJob[]; outcomes: SourceOutcome[] }> {
@@ -226,15 +230,7 @@ export async function searchRemoteBoards(
   return { jobs, outcomes }
 }
 
-/**
- * Re-filters board results against the query.
- *
- * Necessary because the boards match loosely: Remotive answered "react
- * developer" with "Freelance Writer", "Remote Office Assistant" and "Inside
- * Sales Contractor". Since those happened to be the Worldwide ones, an
- * Africa-eligible list built without this would be mostly jobs the user never
- * searched for — which reads as the filter being broken.
- */
+/** Re-filters board results against the query — the boards match loosely. */
 export function filterRelevant(jobs: SourcedJob[], query: string): SourcedJob[] {
   const terms = query.toLowerCase().split(/\s+/).filter(t => t.length >= 3)
   if (!terms.length) return jobs

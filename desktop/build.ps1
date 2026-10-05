@@ -86,6 +86,16 @@ if (Test-Path (Join-Path $root ".env.local")) {
 if (Test-Path (Join-Path $root ".puppeteerrc.cjs")) {
   Copy-Item -Force (Join-Path $root ".puppeteerrc.cjs") (Join-Path $standalone ".puppeteerrc.cjs")
 }
+# Unpublished optional adapters. Loaded at runtime from <cwd>/private, and the
+# standalone server's cwd is this folder, so they have to be copied in. Absent
+# in a public clone, where the app just runs without those sources.
+$privateDir = Join-Path $root "private"
+if (Test-Path $privateDir) {
+  Copy-Item -Recurse -Force $privateDir (Join-Path $standalone "private")
+  $n = (Get-ChildItem $privateDir -File).Count
+  Write-Host "      private adapters: $n file(s)" -ForegroundColor DarkGray
+}
+
 # Stamp the payload version so the updater can tell what this build is.
 # Without it the payload reads as v0 and every check looks like an update.
 $versionFile = Join-Path $desktop "VERSION"

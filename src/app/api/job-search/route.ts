@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseRouteHandlerClient } from '@/lib/supabase-server'
-import { searchJobs, getJobDetail } from '@/lib/linkedin'
+import { loadLinkedIn } from '@/lib/optional-linkedin'
 import {
   searchRemoteBoards, filterRelevant, dedupe, classifyEligibility,
   type SourcedJob, type SourceOutcome,
@@ -23,7 +23,14 @@ export async function GET(req: NextRequest) {
     // Detail lookup — LinkedIn ids only; board listings link out directly.
     const id = params.get('id')
     if (id) {
-      const detail = await getJobDetail(id)
+      const li = loadLinkedIn()
+      if (!li) {
+        return NextResponse.json(
+          { error: 'Job details are only available for LinkedIn results, and that source is not installed.' },
+          { status: 404 },
+        )
+      }
+      const detail = await li.getJobDetail(id)
       if (!detail) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
       return NextResponse.json({ data: detail })
     }
@@ -45,11 +52,13 @@ export async function GET(req: NextRequest) {
     // LinkedIn paginates; the boards return one flat batch, so they are only
     // queried for page 1 and "load more" continues through LinkedIn alone.
     const wantBoards = page === 1 && wanted.some(s => s !== 'linkedin')
-    const wantLinkedIn = wanted.includes('linkedin')
+    // Absent in a public clone, where the three board APIs carry the search.
+    const linkedIn = loadLinkedIn()
+    const wantLinkedIn = wanted.includes('linkedin') && linkedIn !== null
 
     const [liRes, boardRes] = await Promise.allSettled([
-      wantLinkedIn
-        ? searchJobs({
+      wantLinkedIn && linkedIn
+        ? linkedIn.searchJobs({
             query,
             location: params.get('location') ?? undefined,
             jobage: params.get('jobage') ? Number(params.get('jobage')) : undefined,

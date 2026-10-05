@@ -1,11 +1,6 @@
-// Derives the notification feed from data the app already has. Nothing is
-// stored and nothing is scheduled: the list is recomputed from calendar
-// events and applications each time it is read.
-//
-// That is a deliberate limit. Without an always-on server HireKit cannot
-// notify anyone while it is closed, so this feed only answers "what needs
-// attention right now, while I am looking at it". Reminders that must reach
-// you when the app is shut are set on the event and delivered by Google.
+// Notification feed derived from calendar events and applications. Nothing is
+// stored or scheduled -- recomputed on read. Only answers "what needs attention
+// while the app is open"; reach-me-when-closed is a Google event reminder.
 import type { CalendarEvent } from './supabase'
 import { expandRecurrence, toISO } from './recurrence'
 

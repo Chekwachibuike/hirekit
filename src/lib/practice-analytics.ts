@@ -1,7 +1,5 @@
-// Turns the raw practice_attempts rows into the numbers the Progress panel
-// shows. Pure functions over an array — no fetching, no dates beyond what is
-// passed in — so the thresholds below can be reasoned about and tested
-// directly rather than only observed through the UI.
+// practice_attempts rows → the numbers the Progress panel shows.
+// Pure functions, so the thresholds are testable directly.
 
 export interface Attempt {
   id: string
@@ -49,10 +47,8 @@ const monthOf = (iso: string) => iso.slice(0, 7)
 function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00`)
   d.setDate(d.getDate() + n)
-  // Formatted from the local getters, NOT via toISOString(). The date is built
-  // at local midnight, so converting to UTC lands on the previous day in any
-  // positive-offset zone — WAT included — and every streak silently collapsed
-  // to 1 because no two days ever looked adjacent.
+  // Local getters, NOT toISOString(): local midnight converts to the previous
+  // day at positive UTC offsets, which collapsed every streak to 1.
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -61,13 +57,8 @@ function mean(nums: number[]): number {
   return Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10
 }
 
-/**
- * Consecutive days with at least one rated answer.
- *
- * A streak stays "active" through yesterday, not only today: counting it
- * broken the moment midnight passes would mark someone as having lost a
- * 30-day run before they have had any chance to practise.
- */
+/** Consecutive days with a rated answer. Stays active through yesterday, so a
+ *  run does not die at midnight before there is a chance to practise. */
 export function computeStreak(attempts: Attempt[], today: string): Streak {
   if (!attempts.length) return { current: 0, longest: 0, lastDay: null, active: false }
 
@@ -107,13 +98,8 @@ function statsByTopic(rows: Attempt[]): Map<string, number[]> {
   return map
 }
 
-/**
- * Compares a month against the one before it.
- *
- * Topics need at least MIN_ATTEMPTS in both periods before a change counts as
- * improvement: a single lucky answer moving an average from 4 to 8 is noise,
- * and reporting it as progress would be worse than saying nothing.
- */
+/** Month vs the one before. Topics need MIN_ATTEMPTS in both periods before a
+ *  change counts -- one lucky answer moving 4 to 8 is noise. */
 export function monthlyReport(
   attempts: Attempt[],
   month: string,

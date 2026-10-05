@@ -242,6 +242,104 @@ static int spawn_server(const char *exe_dir, int show_console) {
 #define DWMWA_TEXT_COLOR 36
 #endif
 
+/* ── Custom frame ───────────────────────────────────────────────── */
+/* Removes the OS caption so the app's own header reaches the top edge, the
+ * way Slack and Spotify do it. There is no title bar to match because there
+ * is no title bar.
+ *
+ * WM_NCCALCSIZE reclaims the caption strip as client area. The side and
+ * bottom borders are left as DefWindowProc computed them, so the window still
+ * resizes from those edges; only top-edge resize is given up, which is the
+ * usual trade for this approach.
+ *
+ * Dragging cannot use WM_NCHITTEST here: the WebView2 control covers the
+ * client area and takes the mouse before the host window sees it. The header
+ * calls hk_drag() on mousedown instead, which hands the drag to Windows via
+ * WM_NCLBUTTONDOWN so it behaves exactly like a real caption — snap layouts,
+ * double-click to maximise, the lot. */
+static webview_t g_webview = NULL;
+static HWND      g_hwnd    = NULL;
+static WNDPROC   g_prev_proc = NULL;
+
+static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+  switch (msg) {
+  case WM_NCCALCSIZE:
+    if (wp) {
+      NCCALCSIZE_PARAMS *p = (NCCALCSIZE_PARAMS *)lp;
+      RECT before = p->rgrc[0];
+      CallWindowProcW(g_prev_proc, hwnd, msg, wp, lp);
+      p->rgrc[0].top = before.top;   /* reclaim the caption */
+      if (IsZoomed(hwnd)) {
+        /* A maximised window is sized past the work area by the frame
+           thickness; without this inset the top of the UI is clipped. */
+        p->rgrc[0].top += GetSystemMetrics(SM_CXPADDEDBORDER)
+                        + GetSystemMetrics(SM_CYSIZEFRAME);
+      }
+      return 0;
+    }
+    break;
+
+  case WM_NCHITTEST: {
+    /* Keep the resize borders DefWindowProc reports; the reclaimed caption
+       is client area, and the web UI drives dragging itself. */
+    LRESULT hit = CallWindowProcW(g_prev_proc, hwnd, msg, wp, lp);
+    return hit == HTCAPTION ? HTCLIENT : hit;
+  }
+  }
+  return CallWindowProcW(g_prev_proc, hwnd, msg, wp, lp);
+}
+
+static void bind_drag(const char *id, const char *req, void *arg) {
+  (void)req; (void)arg;
+  ReleaseCapture();
+  SendMessageA(g_hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+  webview_return(g_webview, id, 0, "");
+}
+
+static void bind_minimize(const char *id, const char *req, void *arg) {
+  (void)req; (void)arg;
+  ShowWindow(g_hwnd, SW_MINIMIZE);
+  webview_return(g_webview, id, 0, "");
+}
+
+static void bind_maximize(const char *id, const char *req, void *arg) {
+  (void)req; (void)arg;
+  ShowWindow(g_hwnd, IsZoomed(g_hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+  webview_return(g_webview, id, 0, IsZoomed(g_hwnd) ? "true" : "false");
+}
+
+static void bind_close(const char *id, const char *req, void *arg) {
+  (void)req; (void)arg;
+  webview_return(g_webview, id, 0, "");
+  PostMessageA(g_hwnd, WM_CLOSE, 0, 0);
+}
+
+static void bind_is_maximized(const char *id, const char *req, void *arg) {
+  (void)req; (void)arg;
+  webview_return(g_webview, id, 0, IsZoomed(g_hwnd) ? "true" : "false");
+}
+
+static void install_custom_frame(webview_t w, HWND hwnd) {
+  g_webview = w;
+  g_hwnd = hwnd;
+
+  webview_bind(w, "hk_drag",        bind_drag,         NULL);
+  webview_bind(w, "hk_minimize",    bind_minimize,     NULL);
+  webview_bind(w, "hk_maximize",    bind_maximize,     NULL);
+  webview_bind(w, "hk_close",       bind_close,        NULL);
+  webview_bind(w, "hk_isMaximized", bind_is_maximized, NULL);
+
+  /* Lets the web app render window controls only when it is really in the
+     shell — a browser tab must not draw a close button. */
+  webview_init(w, "window.__HIREKIT_DESKTOP__ = true;");
+
+  g_prev_proc = (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)frame_proc);
+
+  /* Forces WM_NCCALCSIZE to run again now that the subclass is in place. */
+  SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+               SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 /* Windows' own light/dark preference — the same signal the web app's "auto"
    theme follows, so both land on the same answer. */
 static BOOL windows_uses_light_theme(void) {
@@ -371,7 +469,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
 
   webview_set_title(w, APP_TITLE);
   webview_set_size(w, WIN_W, WIN_H, WEBVIEW_HINT_NONE);
-  style_window((HWND)webview_get_window(w));
+  {
+    HWND hwnd = (HWND)webview_get_window(w);
+    style_window(hwnd);
+    install_custom_frame(w, hwnd);
+  }
   webview_navigate(w, APP_URL);
 
   /* Window is up; now look for the next update. Runs on its own thread so a

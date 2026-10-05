@@ -5,6 +5,7 @@ import { BriefcaseBusiness, Sun, Moon, Monitor, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/useTheme'
 import NotificationBell from './NotificationBell'
+import WindowControls, { useIsDesktopShell } from './WindowControls'
 
 function IconButton({ label, onClick, title, children }: {
   label: string; onClick?: () => void; title?: string; children: React.ReactNode
@@ -39,6 +40,7 @@ function IconButton({ label, onClick, title, children }: {
 export default function Header() {
   const router = useRouter()
   const { mode, cycle } = useTheme()
+  const inShell = useIsDesktopShell()
   const [initial, setInitial] = useState('U')
 
   useEffect(() => {
@@ -71,7 +73,19 @@ export default function Header() {
       display: 'flex', alignItems: 'center',
       padding: '0 18px',
       zIndex: 100, gap: 10,
-    }}>
+    }}
+      // The desktop shell has no OS caption, so this bar IS the title bar.
+      // Dragging is started from here rather than by WM_NCHITTEST, because the
+      // WebView2 control takes the mouse before the host window sees it.
+      // Buttons stopPropagation via their own handlers, so only empty space
+      // and the logo drag.
+      onMouseDown={e => {
+        if (!inShell) return
+        if ((e.target as HTMLElement).closest('button,a,input,select')) return
+        if (e.detail === 2) { window.hk_maximize?.(); return }   // double-click
+        window.hk_drag?.()
+      }}
+    >
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginRight: 'auto', paddingLeft: 2 }}>
         <div style={{
@@ -114,6 +128,9 @@ export default function Header() {
       <IconButton label="Sign out" onClick={signOut}>
         <LogOut size={15} />
       </IconButton>
+
+      {/* Window controls — desktop shell only, nothing rendered in a browser */}
+      <WindowControls />
     </header>
   )
 }

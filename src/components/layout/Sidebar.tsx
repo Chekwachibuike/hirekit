@@ -1,13 +1,27 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import useSWR from 'swr'
 import {
   LayoutDashboard, FileText, Briefcase, Mail,
   FolderKanban, Settings, ExternalLink,
   BrainCircuit, Calendar, Search, MessageSquare, UserCircle, ClipboardCheck,
 } from 'lucide-react'
+import { fetcher } from '@/lib/fetcher'
 
-const NAV_MAIN = [
+// Items whose backing feature is not available everywhere. The key names a
+// capability from /api/capabilities; the item is hidden when it is false.
+type Capability = 'whatsapp'
+
+interface NavItemDef {
+  href: string
+  label: string
+  icon: React.ElementType
+  /** Hidden unless /api/capabilities reports this as available. */
+  needs?: Capability
+}
+
+const NAV_MAIN: NavItemDef[] = [
   { href: '/dashboard',      label: 'Dashboard',      icon: LayoutDashboard },
   { href: '/personal-info',  label: 'Personal Info',  icon: UserCircle },
   { href: '/applications',   label: 'Applications',   icon: Briefcase },
@@ -16,12 +30,12 @@ const NAV_MAIN = [
   { href: '/projects',       label: 'Projects',       icon: FolderKanban },
 ]
 
-const NAV_AI = [
+const NAV_AI: NavItemDef[] = [
   { href: '/interview-prep', label: 'Interview Prep', icon: BrainCircuit },
   { href: '/skills',         label: 'Skills Audit',   icon: ClipboardCheck },
   { href: '/job-search',     label: 'Job Search',     icon: Search },
   { href: '/calendar',       label: 'Calendar',       icon: Calendar },
-  { href: '/whatsapp',       label: 'WhatsApp',       icon: MessageSquare },
+  { href: '/whatsapp',       label: 'WhatsApp',       icon: MessageSquare, needs: 'whatsapp' as Capability },
 ]
 
 function NavItem({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) {
@@ -77,6 +91,11 @@ function SectionLabel({ label }: { label: string }) {
 }
 
 export default function Sidebar() {
+  // Until this resolves, capability-gated items stay hidden: showing one that
+  // then disappears is worse than it arriving a moment late.
+  const { data: caps } = useSWR<Record<string, boolean>>('/api/capabilities', fetcher)
+  const available = (item: NavItemDef) => !item.needs || caps?.[item.needs] === true
+
   return (
     <aside style={{
       position: 'fixed', left: 0, top: 'var(--topbar-h)', bottom: 0,
@@ -92,10 +111,10 @@ export default function Sidebar() {
       {/* Main nav */}
       <nav style={{ flex: 1, padding: '6px 12px 0', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
         <SectionLabel label="Core" />
-        {NAV_MAIN.map(item => <NavItem key={item.href} {...item} />)}
+        {NAV_MAIN.filter(available).map(item => <NavItem key={item.href} {...item} />)}
 
         <SectionLabel label="AI Tools" />
-        {NAV_AI.map(item => <NavItem key={item.href} {...item} />)}
+        {NAV_AI.filter(available).map(item => <NavItem key={item.href} {...item} />)}
       </nav>
 
       {/* Portfolio link */}

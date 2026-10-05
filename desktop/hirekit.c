@@ -194,6 +194,11 @@ static int spawn_server(const char *exe_dir, int show_console) {
   SetEnvironmentVariableA("PORT", SERVER_PORTS);
   SetEnvironmentVariableA("HOSTNAME", "127.0.0.1");
 
+  /* Tells the app it is running on a machine it owns, so features needing a
+     persistent local process (WhatsApp) are offered. A hosted deployment has
+     no such marker and hides them. */
+  SetEnvironmentVariableA("HIREKIT_DESKTOP", "1");
+
   /* CREATE_SUSPENDED so we can attach the job BEFORE any code runs —
      otherwise a fast-forking child could escape the job. */
   BOOL ok = CreateProcessA(NULL, cmd, NULL, NULL,

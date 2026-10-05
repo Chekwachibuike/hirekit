@@ -128,7 +128,7 @@ if (-not $?) { Pop-Location; throw "update.c failed to compile" }
 g++ -c webview_impl.cc -o webview_impl.o -O2 -std=c++14 "-I$inc1" "-I$inc2"
 if (-not $?) { Pop-Location; throw "webview_impl.cc failed to compile" }
 g++ hirekit.o webview_impl.o update.o hirekit-res.o -o $out -O2 -static -mwindows `
-  -ladvapi32 -lole32 -lshell32 -lshlwapi -luser32 -lversion -lws2_32 -lwinhttp -lbcrypt
+  -ladvapi32 -lole32 -lshell32 -lshlwapi -luser32 -lversion -lws2_32 -lwinhttp -lbcrypt -ldwmapi
 if (-not $?) { Pop-Location; throw "link failed" }
 Remove-Item hirekit.o, webview_impl.o, update.o, hirekit-res.o -ErrorAction SilentlyContinue
 Pop-Location

@@ -20,18 +20,21 @@
   --c-overlay:       rgba(17,24,39,0.42);   /* modal scrim  */
 
   /* ── Chrome (header + sidebar) ───────────────────────
-     Dark in BOTH themes, the way Shopify does it: the frame stays
-     constant and only the content panel follows the theme. Content
-     colours are unreadable on it, so anything drawn on the chrome
-     uses these rather than --c-text / --c-border.                  */
-  --c-chrome-bar:    #121215;   /* header only — see below */
-  --c-chrome:        #1C1C1F;   /* sidebar panel            */
-  --c-chrome-hover:  rgba(255,255,255,0.08);
-  --c-chrome-active: rgba(255,255,255,0.13);
-  --c-chrome-text:   rgba(255,255,255,0.95);
-  --c-chrome-muted:  rgba(255,255,255,0.60);
-  --c-chrome-dim:    rgba(255,255,255,0.38);
-  --c-chrome-border: rgba(255,255,255,0.10);
+     Follows the theme. These were dark in both themes for a while, which
+     is what Shopify does, but a black sidebar in light mode reads as a
+     bug rather than a choice.
+
+     The bar is kept a step apart from the sidebar panel in either theme:
+     two abutting surfaces of the same colour would hide the corner curve
+     between the chrome and the content.                              */
+  --c-chrome-bar:    #FFFFFF;   /* header            */
+  --c-chrome:        #F7F7F9;   /* sidebar panel     */
+  --c-chrome-hover:  rgba(17,24,39,0.055);
+  --c-chrome-active: rgba(17,24,39,0.085);
+  --c-chrome-text:   #101828;
+  --c-chrome-muted:  rgba(16,24,40,0.62);
+  --c-chrome-dim:    rgba(16,24,40,0.40);
+  --c-chrome-border: rgba(17,24,39,0.10);
 
   /* ── Borders ───────────────────────────────────────── */
   --c-border:      rgba(17,24,39,0.09);
@@ -116,6 +119,12 @@
      reads as slightly lighter and the notch still separates. */
   --c-chrome-bar:    #0A0B0E;
   --c-chrome:        #17181D;
+  --c-chrome-hover:  rgba(255,255,255,0.08);
+  --c-chrome-active: rgba(255,255,255,0.13);
+  --c-chrome-text:   rgba(255,255,255,0.95);
+  --c-chrome-muted:  rgba(255,255,255,0.60);
+  --c-chrome-dim:    rgba(255,255,255,0.38);
+  --c-chrome-border: rgba(255,255,255,0.10);
 
   --c-border:      rgba(255,255,255,0.08);
   --c-border-md:   rgba(255,255,255,0.15);

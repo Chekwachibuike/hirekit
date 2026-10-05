@@ -29,6 +29,7 @@
 
 #include <winsock2.h>   /* must precede windows.h */
 #include <windows.h>
+#include <dwmapi.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -220,6 +221,76 @@ static int spawn_server(const char *exe_dir, int show_console) {
   return 1;
 }
 
+/* ── Window chrome ──────────────────────────────────────────────── */
+/* Two things Windows gets wrong by default here.
+ *
+ * The icon in the title bar and Alt-Tab is the WINDOW icon, which is separate
+ * from the exe's resource icon that Explorer uses — unset, so Windows supplied
+ * a generic one. It has to be loaded and attached to the window.
+ *
+ * The caption is painted with the user's personalisation accent colour, which
+ * is why it came out red. DWM lets an app ask for its own, so it matches the
+ * dark chrome inside. Windows 11 only; the calls just fail harmlessly on older
+ * builds, which is why their results are ignored. */
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_CAPTION_COLOR
+#define DWMWA_CAPTION_COLOR 35
+#endif
+#ifndef DWMWA_TEXT_COLOR
+#define DWMWA_TEXT_COLOR 36
+#endif
+
+/* Windows' own light/dark preference — the same signal the web app's "auto"
+   theme follows, so both land on the same answer. */
+static BOOL windows_uses_light_theme(void) {
+  HKEY key;
+  DWORD value = 1, size = sizeof(value);
+  if (RegOpenKeyExA(HKEY_CURRENT_USER,
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        0, KEY_READ, &key) != ERROR_SUCCESS) {
+    return TRUE;   /* unreadable: assume light, Windows' own default */
+  }
+  if (RegQueryValueExA(key, "AppsUseLightTheme", NULL, NULL,
+                       (LPBYTE)&value, &size) != ERROR_SUCCESS) {
+    value = 1;
+  }
+  RegCloseKey(key);
+  return value != 0;
+}
+
+static void style_window(HWND hwnd) {
+  if (!hwnd) return;
+
+  HINSTANCE inst = GetModuleHandleA(NULL);
+  /* Resource id 1 — see desktop/hirekit.rc. Loaded at both sizes so the title
+     bar and Alt-Tab each get a properly scaled version instead of a stretched
+     one. */
+  HICON big = (HICON)LoadImageA(inst, MAKEINTRESOURCEA(1), IMAGE_ICON,
+                                GetSystemMetrics(SM_CXICON),
+                                GetSystemMetrics(SM_CYICON), 0);
+  HICON small = (HICON)LoadImageA(inst, MAKEINTRESOURCEA(1), IMAGE_ICON,
+                                  GetSystemMetrics(SM_CXSMICON),
+                                  GetSystemMetrics(SM_CYSMICON), 0);
+  if (big)   SendMessageA(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)big);
+  if (small) SendMessageA(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)small);
+
+  /* Match the app's own chrome, which follows the theme. The web app's
+     "auto" mode reads the same Windows preference, so reading it here keeps
+     the caption and the UI underneath in agreement without the two needing
+     to talk to each other.
+
+     COLORREF is 0x00BBGGRR, hence the reversed byte order below. */
+  BOOL light = windows_uses_light_theme();
+  BOOL dark = !light;
+  COLORREF caption = light ? 0x00FFFFFF   /* #FFFFFF */ : 0x000E0B0A; /* #0A0B0E */
+  COLORREF text    = light ? 0x00281810   /* #101828 */ : 0x00F2F2F2;
+  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+  DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
+  DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &text, sizeof(text));
+}
+
 /* ── Entry ──────────────────────────────────────────────────────── */
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
   (void)hInst; (void)hPrev; (void)nShow;
@@ -300,6 +371,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
 
   webview_set_title(w, APP_TITLE);
   webview_set_size(w, WIN_W, WIN_H, WEBVIEW_HINT_NONE);
+  style_window((HWND)webview_get_window(w));
   webview_navigate(w, APP_URL);
 
   /* Window is up; now look for the next update. Runs on its own thread so a

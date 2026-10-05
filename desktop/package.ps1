@@ -60,7 +60,7 @@ New-Item -ItemType Directory -Force $release | Out-Null
 # robocopy, not Copy-Item: node_modules nests past MAX_PATH.
 $rc = Start-Process robocopy -Wait -NoNewWindow -PassThru -ArgumentList @(
   "`"$standalone`"", "`"$stage`"", "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP",
-  "/XF", ".env.local", "/XD", ".wwebjs_auth", ".wwebjs_cache"
+  "/XF", ".env.local", "/XD", ".wwebjs_auth", ".wwebjs_cache", "private"
 )
 if ($rc.ExitCode -ge 8) { throw "robocopy failed with exit code $($rc.ExitCode)" }
 
@@ -69,6 +69,14 @@ $leaked = Get-ChildItem -Path $stage -Recurse -Force -Include ".env.local", ".en
 if ($leaked) {
   Remove-Item -Recurse -Force $stage
   throw "ABORT: secret file(s) found in staged payload: $($leaked.FullName -join ', ')"
+}
+
+# private/ holds adapters kept out of the published repo. A release payload is
+# a public download, so shipping them would undo that in a less obvious way.
+$privateLeak = Get-ChildItem -Path $stage -Recurse -Force -Directory -Filter "private" -ErrorAction SilentlyContinue
+if ($privateLeak) {
+  Remove-Item -Recurse -Force $stage
+  throw "ABORT: private/ found in staged payload: $($privateLeak.FullName -join ', ')"
 }
 
 Set-Content -Path (Join-Path $stage ".hirekit-version") -Value "$Version" -Encoding ascii -NoNewline

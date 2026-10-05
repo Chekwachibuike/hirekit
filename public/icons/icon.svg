@@ -1,25 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- HireKit app icon. Brand gradient from tokens.css (--c-violet to --c-coral).
-     The mark is optically centred: the handle adds weight on top, so the group
-     sits 8px above geometric centre. Check weight is set for 16px legibility. -->
+  <!-- HireKit app icon.
+
+       Charcoal tile matching the app's own chrome (--c-chrome-bar #121215),
+       not a gradient: the icon should look like the product it opens.
+       One violet accent (--c-violet) so it is identifiable in a taskbar
+       without being decorative.
+
+       Mark sits 8px above geometric centre — the handle carries weight on
+       top, so true centring reads low. Check weight is set for 16px, which
+       is the size that actually decides an app icon.
+
+       For a fully monochrome variant, change the check stroke to #1C1C1F.
+       Regenerate PNGs and ICOs after any edit. -->
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7C5CFC"/>
-      <stop offset="1" stop-color="#F4633A"/>
+    <linearGradient id="t" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26262B"/><stop offset="1" stop-color="#121215"/>
     </linearGradient>
-
-    <mask id="cut">
-      <rect x="96" y="178" width="320" height="214" rx="34" fill="#fff"/>
-      <path d="M 194 286 L 238 330 L 322 246"
-            fill="none" stroke="#000" stroke-width="46"
-            stroke-linecap="round" stroke-linejoin="round"/>
-    </mask>
   </defs>
-
-  <rect width="512" height="512" rx="112" fill="url(#g)"/>
-
+  <rect width="512" height="512" rx="112" fill="url(#t)"/>
   <path d="M 186 178 V 142 a 26 26 0 0 1 26 -26 h 88 a 26 26 0 0 1 26 26 v 36"
         fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round"/>
-
-  <rect x="96" y="178" width="320" height="214" rx="34" fill="#fff" mask="url(#cut)"/>
+  <rect x="96" y="178" width="320" height="214" rx="30" fill="#fff"/>
+  <path d="M 194 286 L 238 330 L 322 246" fill="none" stroke="#7C5CFC"
+        stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

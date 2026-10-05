@@ -3,8 +3,9 @@ import { createSupabaseRouteHandlerClient } from '@/lib/supabase-server'
 import { loadLinkedIn } from '@/lib/optional-linkedin'
 import {
   searchRemoteBoards, filterRelevant, dedupe, classifyEligibility,
-  type SourcedJob, type SourceOutcome,
+  SOURCES_BY_MODE, type SourcedJob, type SourceOutcome, type JobSourceId,
 } from '@/lib/job-sources'
+import { checkSponsorsBulk } from '@/lib/uk-sponsors'
 
 export const runtime = 'nodejs'
 
@@ -41,8 +42,14 @@ export async function GET(req: NextRequest) {
     }
 
     const africaOnly = params.get('africaOnly') === '1'
-    const wanted = (params.get('sources') ?? 'linkedin,remotive,jobicy,remoteok')
-      .split(',').map(s => s.trim()).filter(Boolean)
+    // 'remote' searches boards of remote work; 'relocation' searches on-site
+    // roles and checks the UK sponsor register, which only makes sense when
+    // moving country is the point.
+    const mode: 'remote' | 'relocation' =
+      params.get('mode') === 'relocation' ? 'relocation' : 'remote'
+    const sponsorOnly = params.get('sponsorOnly') === '1'
+    const wanted = (params.get('sources') ?? SOURCES_BY_MODE[mode].join(','))
+      .split(',').map(s => s.trim()).filter(Boolean) as JobSourceId[]
     const page = params.get('page') ? Number(params.get('page')) : 1
 
     const remoteParam = params.get('remote')
@@ -66,7 +73,7 @@ export async function GET(req: NextRequest) {
             page,
           })
         : Promise.resolve([]),
-      wantBoards ? searchRemoteBoards(query) : Promise.resolve({ jobs: [], outcomes: [] }),
+      wantBoards ? searchRemoteBoards(query, wanted) : Promise.resolve({ jobs: [], outcomes: [] }),
     ])
 
     const outcomes: SourceOutcome[] = []
@@ -102,13 +109,38 @@ export async function GET(req: NextRequest) {
     }
 
     jobs = dedupe(jobs)
+
+    // Relocation mode only: a sponsor licence is about moving country, and
+    // the register is 11MB, so it is never fetched for a remote search.
+    let sponsorAsOf: string | null = null
+    if (mode === 'relocation') {
+      const { map, asOf } = await checkSponsorsBulk(jobs.map(j => j.company))
+      sponsorAsOf = asOf
+      jobs = jobs.map(j => {
+        const m = j.company ? map.get(j.company) : undefined
+        return m?.licensed
+          ? { ...j, ukSponsor: true, ukSponsorMatchedAs: m.matchedAs }
+          : { ...j, ukSponsor: false }
+      })
+    }
+
     const eligibleCount = jobs.filter(j => j.eligibility === 'africa-ok').length
-    if (africaOnly) jobs = jobs.filter(j => j.eligibility === 'africa-ok')
+    const sponsorCount = jobs.filter(j => j.ukSponsor).length
+    const visaCount = jobs.filter(j => j.visa === 'offers').length
+
+    // A posting that says it will not sponsor is useless when relocating,
+    // whatever the register says about the company.
+    if (mode === 'relocation') jobs = jobs.filter(j => j.visa !== 'denies')
+    if (sponsorOnly) jobs = jobs.filter(j => j.ukSponsor || j.visa === 'offers')
+    if (africaOnly && mode === 'remote') jobs = jobs.filter(j => j.eligibility === 'africa-ok')
 
     // Newest first, undated last.
     jobs.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
-    return NextResponse.json({ data: jobs, sources: outcomes, eligibleCount })
+    return NextResponse.json({
+      data: jobs, sources: outcomes, mode,
+      eligibleCount, sponsorCount, visaCount, sponsorAsOf,
+    })
   } catch (err) {
     console.error('[job-search GET]', err)
     const msg = err instanceof Error && err.message.includes('rate limit')

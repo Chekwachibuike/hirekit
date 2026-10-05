@@ -33,7 +33,10 @@ export interface JobSearchOptions {
   page?: number
 }
 
-export type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok'
+export type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
+
+/** What a posting says about sponsoring a work visa, if anything. */
+export type VisaSignal = 'offers' | 'denies' | 'unstated'
 
 /** Whether someone based in Nigeria / Africa may apply. */
 export type Eligibility = 'africa-ok' | 'restricted' | 'unknown'
@@ -44,13 +47,38 @@ export interface SourcedJob extends JobCard {
   /** The board's own wording, shown so the user can judge for themselves. */
   eligibilityNote: string | null
   remote: boolean
+  /** What the posting says about sponsorship, where a description exists. */
+  visa?: VisaSignal
+  /** Set by the API when the company holds a UK sponsor licence. */
+  ukSponsor?: boolean
+  ukSponsorMatchedAs?: string | null
 }
 
 export const SOURCE_LABELS: Record<JobSourceId, string> = {
-  linkedin: 'LinkedIn',
-  remotive: 'Remotive',
-  jobicy:   'Jobicy',
-  remoteok: 'RemoteOK',
+  linkedin:  'LinkedIn',
+  remotive:  'Remotive',
+  jobicy:    'Jobicy',
+  remoteok:  'RemoteOK',
+  arbeitnow: 'Arbeitnow',
+}
+
+/** Remote boards carry remote work; Arbeitnow carries on-site European roles,
+ *  which is where relocation and sponsorship actually apply. */
+export const SOURCES_BY_MODE: Record<'remote' | 'relocation', JobSourceId[]> = {
+  remote:     ['linkedin', 'remotive', 'jobicy', 'remoteok'],
+  relocation: ['linkedin', 'arbeitnow'],
+}
+
+const VISA_OFFERS = /(visa sponsorship|sponsor(ship)? (is )?(available|provided|offered)|we (can )?sponsor|will sponsor|relocation (support|assistance|package|bonus)|work permit (support|provided)|tier 2|skilled worker visa)/i
+const VISA_DENIES = /(no (visa )?sponsorship|cannot sponsor|unable to sponsor|not (able|in a position) to sponsor|without (visa )?sponsorship|must (already )?(be|have) (authori[sz]ed|eligible) to work|no relocation)/i
+
+/** Denial wins over an offer: a post saying both usually means "we sponsor
+ *  some roles, not this one". */
+export function detectVisaSignal(text?: string | null): VisaSignal {
+  if (!text) return 'unstated'
+  if (VISA_DENIES.test(text)) return 'denies'
+  if (VISA_OFFERS.test(text)) return 'offers'
+  return 'unstated'
 }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 HireKit/1.0'
@@ -190,11 +218,54 @@ async function fromRemoteOk(query: string): Promise<SourcedJob[]> {
     })
 }
 
+
+// ── Arbeitnow ─────────────────────────────────────────────────────
+// Mostly on-site European roles, which is why it carries the relocation mode:
+// the remote boards are ~0% on visa talk, Arbeitnow postings mention it a few
+// percent of the time because relocating is actually on the table.
+interface ArbeitnowJob {
+  slug: string; company_name: string; title: string; description?: string
+  remote?: boolean; url: string; location?: string; created_at?: number
+  tags?: string[]
+}
+
+async function fromArbeitnow(query: string): Promise<SourcedJob[]> {
+  const data = await getJson('https://www.arbeitnow.com/api/job-board-api') as { data?: ArbeitnowJob[] }
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+
+  return (data.data ?? [])
+    .filter(j => {
+      const hay = `${j.title ?? ''} ${j.company_name ?? ''} ${(j.tags ?? []).join(' ')}`.toLowerCase()
+      return terms.length === 0 || terms.some(t => hay.includes(t))
+    })
+    .slice(0, 60)
+    .map(j => {
+      // Arbeitnow publishes where the job is, not who may apply, so
+      // eligibility stays unknown and the visa signal does the work here.
+      const el = classifyEligibility(j.location)
+      return {
+        id: `arbeitnow:${j.slug}`,
+        title: j.title,
+        company: j.company_name ?? null,
+        companyUrl: null,
+        location: j.location ?? null,
+        date: isoDate(j.created_at ?? null),
+        url: j.url,
+        source: 'arbeitnow' as const,
+        eligibility: el.level === 'africa-ok' ? 'africa-ok' : 'unknown' as Eligibility,
+        eligibilityNote: j.location ?? null,
+        remote: !!j.remote,
+        visa: detectVisaSignal(`${j.title ?? ''} ${j.description ?? ''}`),
+      }
+    })
+}
+
 // ── Aggregate ─────────────────────────────────────────────────────
 const ADAPTERS: Record<Exclude<JobSourceId, 'linkedin'>, (q: string) => Promise<SourcedJob[]>> = {
   remotive: fromRemotive,
   jobicy: fromJobicy,
   remoteok: fromRemoteOk,
+  arbeitnow: fromArbeitnow,
 }
 
 export interface SourceOutcome {
@@ -207,8 +278,10 @@ export interface SourceOutcome {
 /** Queries the boards in parallel; failures are isolated and reported. */
 export async function searchRemoteBoards(
   query: string,
+  only?: JobSourceId[],
 ): Promise<{ jobs: SourcedJob[]; outcomes: SourceOutcome[] }> {
-  const ids = Object.keys(ADAPTERS) as Exclude<JobSourceId, 'linkedin'>[]
+  const all = Object.keys(ADAPTERS) as Exclude<JobSourceId, 'linkedin'>[]
+  const ids = only ? all.filter(id => only.includes(id)) : all
   const settled = await Promise.allSettled(ids.map(id => ADAPTERS[id](query)))
 
   const jobs: SourcedJob[] = []

@@ -9,7 +9,8 @@ import { fetcher } from '@/lib/fetcher'
 
 // Mirrors JobCard / JobDetail in src/lib/linkedin.ts (client copy — the lib
 // itself is server-only so we don't import from it here)
-type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok'
+type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
+type SearchMode = 'remote' | 'relocation'
 type Eligibility = 'africa-ok' | 'restricted' | 'unknown'
 
 interface JobCard {
@@ -24,6 +25,11 @@ interface JobCard {
   /** Whether a Nigeria-based applicant may apply, per the board's own wording. */
   eligibility?: Eligibility
   eligibilityNote?: string | null
+  /** What the posting says about sponsoring a work visa. */
+  visa?: 'offers' | 'denies' | 'unstated'
+  /** Company holds a UK Skilled Worker sponsor licence. */
+  ukSponsor?: boolean
+  ukSponsorMatchedAs?: string | null
 }
 
 interface SourceOutcome {
@@ -38,6 +44,7 @@ const SOURCE_LABELS: Record<JobSourceId, string> = {
   remotive: 'Remotive',
   jobicy: 'Jobicy',
   remoteok: 'RemoteOK',
+  arbeitnow: 'Arbeitnow',
 }
 interface JobDetail extends JobCard {
   description: string | null
@@ -92,6 +99,10 @@ export default function JobSearchPage() {
   const [remote, setRemote]     = useState<Remote>('')
   const [jobage, setJobage]     = useState(7)
   const [africaOnly, setAfricaOnly] = useState(true)
+  const [mode, setMode] = useState<SearchMode>('remote')
+  const [sponsorOnly, setSponsorOnly] = useState(false)
+  const [sponsorCount, setSponsorCount] = useState(0)
+  const [sponsorAsOf, setSponsorAsOf] = useState<string | null>(null)
   const [sourceOutcomes, setSourceOutcomes] = useState<SourceOutcome[]>([])
   const [eligibleCount, setEligibleCount]   = useState(0)
 
@@ -122,6 +133,8 @@ export default function JobSearchPage() {
     if (remote) params.set('remote', remote)
     if (jobage > 0) params.set('jobage', String(jobage))
     if (africaOnly) params.set('africaOnly', '1')
+    params.set('mode', mode)
+    if (sponsorOnly) params.set('sponsorOnly', '1')
     return params
   }
 
@@ -138,6 +151,8 @@ export default function JobSearchPage() {
       setResults(json.data)
       setSourceOutcomes(json.sources ?? [])
       setEligibleCount(json.eligibleCount ?? 0)
+      setSponsorCount(json.sponsorCount ?? 0)
+      setSponsorAsOf(json.sponsorAsOf ?? null)
       setSearched(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Search failed')
@@ -280,9 +295,44 @@ export default function JobSearchPage() {
           Search
         </button>
 
+        {/* Remote vs relocation are different searches: different sources, and
+            sponsorship only means anything when moving country. */}
+        <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 999, background: 'var(--c-bg-2)', border: '1px solid var(--c-border)' }}>
+          {(['remote', 'relocation'] as SearchMode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              title={m === 'remote'
+                ? 'Remote roles, filtered to those open to Africa'
+                : 'On-site roles abroad, checked against the UK sponsor register'}
+              style={{
+                padding: '6px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                fontFamily: 'var(--font-body)', fontSize: 12,
+                fontWeight: mode === m ? 700 : 500,
+                background: mode === m ? 'var(--c-violet-dim)' : 'transparent',
+                color: mode === m ? 'var(--c-violet)' : 'var(--c-text-muted)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {m === 'remote' ? 'Remote' : 'Relocation'}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'relocation' && (
+          <label
+            title="Only roles where the company holds a UK sponsor licence, or the posting says it sponsors"
+            style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, color: 'var(--c-text-muted)', userSelect: 'none' }}
+          >
+            <input type="checkbox" checked={sponsorOnly} onChange={e => setSponsorOnly(e.target.checked)}
+              style={{ accentColor: 'var(--c-teal)', width: 14, height: 14, cursor: 'pointer' }} />
+            Sponsors only
+          </label>
+        )}
+
         {/* Most remote listings name regions that exclude Africa, so this is
             on by default — otherwise the majority of results are unusable. */}
-        <label
+        {mode === 'remote' && <label
           title="Only roles whose board says a Nigeria/Africa-based applicant may apply"
           style={{
             display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
@@ -296,7 +346,7 @@ export default function JobSearchPage() {
             style={{ accentColor: 'var(--c-teal)', width: 14, height: 14, cursor: 'pointer' }}
           />
           Open to Africa only
-        </label>
+        </label>}
       </div>
 
       {/* Which boards answered, and how many survived the eligibility filter */}
@@ -323,10 +373,17 @@ export default function JobSearchPage() {
               {SOURCE_LABELS[o.source]} {o.ok ? o.count : 'down'}
             </span>
           ))}
-          <span>
-            {eligibleCount} open to Africa
-            {!africaOnly && ' — tick the filter to show only those'}
-          </span>
+          {mode === 'remote' ? (
+            <span>
+              {eligibleCount} open to Africa
+              {!africaOnly && ' — tick the filter to show only those'}
+            </span>
+          ) : (
+            <span>
+              {sponsorCount} licensed UK sponsor{sponsorCount === 1 ? '' : 's'}
+              {sponsorAsOf && ` · register of ${sponsorAsOf}`}
+            </span>
+          )}
         </div>
       )}
 
@@ -419,6 +476,20 @@ export default function JobSearchPage() {
                           title={job.eligibilityNote ? `Board says: ${job.eligibilityNote}` : undefined}
                           style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 999, background: 'rgba(0,168,133,0.1)', color: 'var(--c-teal)', fontWeight: 600, fontSize: 10, border: '1px solid rgba(0,168,133,0.22)' }}>
                           <Check size={10} /> Open to Africa
+                        </span>
+                      )}
+                      {job.ukSponsor && (
+                        <span
+                          title={`On the UK register of licensed sponsors${job.ukSponsorMatchedAs ? ` as "${job.ukSponsorMatchedAs}"` : ''}. A licence means they can sponsor, not that they will for this role.`}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 999, background: 'rgba(0,168,133,0.1)', color: 'var(--c-teal)', fontWeight: 600, fontSize: 10, border: '1px solid rgba(0,168,133,0.22)' }}>
+                          <Check size={10} /> UK sponsor
+                        </span>
+                      )}
+                      {job.visa === 'offers' && (
+                        <span
+                          title="The posting itself mentions visa sponsorship or relocation support"
+                          style={{ padding: '2px 9px', borderRadius: 999, background: 'var(--c-violet-dim)', color: 'var(--c-violet)', fontWeight: 600, fontSize: 10 }}>
+                          Mentions sponsorship
                         </span>
                       )}
                       {job.eligibility === 'restricted' && (

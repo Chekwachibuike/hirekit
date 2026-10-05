@@ -88,6 +88,8 @@ export default function PersonalInfoPage() {
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
   const [skillInput, setSkillInput] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
 
   // Cached across navigations — revisiting this page shows the last-loaded
   // data instantly instead of refetching from scratch every time.
@@ -109,15 +111,13 @@ export default function PersonalInfoPage() {
 
   // ── PDF Upload ────────────────────────────────────────────
 
-  const onDrop = useCallback(async (files: File[]) => {
-    const file = files[0]
-    if (!file) return
+  // The dropzone and the paste box post to the same endpoint; only the field
+  // differs, so parsing and applying the result is shared.
+  const parseCv = useCallback(async (body: FormData) => {
     setUploading(true)
     setError(null)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/upload/cv', { method: 'POST', body: fd })
+      const res = await fetch('/api/upload/cv', { method: 'POST', body })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Upload failed')
       const { parsed, file_name } = json
@@ -138,12 +138,31 @@ export default function PersonalInfoPage() {
         cv_file_name:  file_name,
       }))
       setUploadedFile(file_name)
+      setPasteOpen(false)
+      setPasteText('')
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Upload failed')
+      const message = e instanceof Error ? e.message : 'Upload failed'
+      setError(message)
+      // A scan has no text layer, so pasting is the only way through.
+      if (/paste/i.test(message)) setPasteOpen(true)
     } finally {
       setUploading(false)
     }
   }, [])
+
+  const onDrop = useCallback(async (files: File[]) => {
+    const file = files[0]
+    if (!file) return
+    const fd = new FormData()
+    fd.append('file', file)
+    await parseCv(fd)
+  }, [parseCv])
+
+  const onPasteSubmit = useCallback(async () => {
+    const fd = new FormData()
+    fd.append('text', pasteText)
+    await parseCv(fd)
+  }, [parseCv, pasteText])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop, accept: { 'application/pdf': ['.pdf'] }, multiple: false, disabled: uploading,
@@ -285,6 +304,53 @@ export default function PersonalInfoPage() {
             </div>
           )}
         </div>
+
+        <div style={{ marginTop: 10, textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setPasteOpen(o => !o)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--c-violet)', fontWeight: 500, padding: 4 }}
+          >
+            {pasteOpen ? 'Hide paste box' : 'Paste CV text instead'}
+          </button>
+        </div>
+
+        {pasteOpen && (
+          <div style={{ marginTop: 8 }}>
+            <textarea
+              value={pasteText}
+              onChange={e => setPasteText(e.target.value)}
+              placeholder="Paste the full text of your CV here. Use this when the PDF is a scan and has no text layer."
+              rows={10}
+              disabled={uploading}
+              style={{
+                width: '100%', padding: 12, fontSize: 13, lineHeight: 1.6,
+                borderRadius: 'var(--r-md)', border: '1px solid var(--c-border)',
+                background: 'var(--c-bg-3)', color: 'var(--c-text)',
+                resize: 'vertical', fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--c-text-muted)' }}>
+                {pasteText.trim().length} characters, 80 minimum
+              </span>
+              <button
+                type="button"
+                onClick={onPasteSubmit}
+                disabled={uploading || pasteText.trim().length < 80}
+                style={{
+                  padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                  borderRadius: 'var(--r-md)', border: 'none',
+                  background: uploading || pasteText.trim().length < 80 ? 'var(--c-bg-4)' : 'var(--c-violet)',
+                  color: uploading || pasteText.trim().length < 80 ? 'var(--c-text-muted)' : '#fff',
+                  cursor: uploading || pasteText.trim().length < 80 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {uploading ? 'Parsing…' : 'Parse text'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {form.cv_markdown && (
           <details style={{ marginTop: 12 }}>

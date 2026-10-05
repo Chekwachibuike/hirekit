@@ -1,11 +1,22 @@
 {
-  "name": "job-app",
+  "name": "hirekit",
   "version": "0.1.0",
   "private": true,
+  "description": "Personal job-search command centre: CV builder, application tracker, interview practice and calendar, with AI where it saves time.",
+  "license": "MIT",
+  "author": "Chekwachibuike",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Chekwachibuike/hirekit.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/ssr": "^0.1.0",

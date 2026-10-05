@@ -1,6 +1,6 @@
-// Loads the optional LinkedIn adapter from private/ (gitignored) if installed.
+// Loads an optional job-source adapter from private/ if one is installed.
 // Runtime require, not import — a static specifier would fail the build when
-// the file is absent. See docs/internal/decisions.md.
+// the file is absent, which is the normal case.
 import path from 'path'
 import { createRequire } from 'module'
 import type { JobCard, JobDetail, JobSearchOptions } from './job-sources'

@@ -1,6 +1,6 @@
 // Remote job boards with public JSON APIs. Remotive and Jobicy publish who may
 // apply (candidate_required_location / jobGeo), which is what makes the
-// Africa-eligibility filter possible. See docs/internal/decisions.md.
+// eligibility filter possible at all.
 //
 // Server-side only: called from API routes, never a Client Component.
 

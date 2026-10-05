@@ -22,6 +22,8 @@ interface JobCard {
   date: string | null
   url: string
   source?: JobSourceId
+  /** Posting body, where the board returned one. */
+  description?: string | null
   /** Whether a Nigeria-based applicant may apply, per the board's own wording. */
   eligibility?: Eligibility
   eligibilityNote?: string | null
@@ -182,10 +184,10 @@ export default function JobSearchPage() {
     try {
       const res  = await fetch(`/api/job-search?id=${job.id}`)
       const json = await res.json()
-      if (res.ok) setDetail(json.data)
-      else setDetail({ ...job, description: null, seniority: null, employmentType: null, jobFunction: null, industries: null, applyUrl: null })
+      if (res.ok) setDetail({ ...json.data, source: job.source })
+      else setDetail({ ...job, description: job.description ?? null, seniority: null, employmentType: null, jobFunction: null, industries: null, applyUrl: null })
     } catch {
-      setDetail({ ...job, description: null, seniority: null, employmentType: null, jobFunction: null, industries: null, applyUrl: null })
+      setDetail({ ...job, description: job.description ?? null, seniority: null, employmentType: null, jobFunction: null, industries: null, applyUrl: null })
     } finally {
       setDetailLoading(null)
     }
@@ -661,7 +663,7 @@ export default function JobSearchPage() {
                   color: 'var(--c-text-muted)', fontSize: 12, fontWeight: 600,
                   textDecoration: 'none', fontFamily: 'var(--font-body)',
                 }}>
-                <ExternalLink size={12} /> View on LinkedIn
+                <ExternalLink size={12} /> View on {detail.source ? SOURCE_LABELS[detail.source] : 'site'}
               </a>
             </div>
 
@@ -675,7 +677,7 @@ export default function JobSearchPage() {
               </div>
             ) : (
               <p style={{ fontSize: 12, color: 'var(--c-text-dim)' }}>
-                Full description unavailable — open the listing on LinkedIn to read it.
+                Full description unavailable — open the listing on {detail.source ? SOURCE_LABELS[detail.source] : 'the site'} to read it.
               </p>
             )}
           </div>

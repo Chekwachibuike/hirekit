@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseRouteHandlerClient } from '@/lib/supabase-server'
-import { loadLinkedIn } from '@/lib/optional-linkedin'
+import { loadLinkedIn, linkedInLoadError } from '@/lib/optional-linkedin'
 import {
   searchRemoteBoards, filterRelevant, dedupe, classifyEligibility,
   SOURCES_BY_MODE, type SourcedJob, type SourceOutcome, type JobSourceId,
@@ -77,6 +77,16 @@ export async function GET(req: NextRequest) {
     ])
 
     const outcomes: SourceOutcome[] = []
+
+    // The adapter is required from disk at runtime. When it is missing the
+    // search dropped LinkedIn without pushing any outcome, so the source just
+    // vanished from the UI with nothing saying why.
+    if (wanted.includes('linkedin') && !linkedIn) {
+      outcomes.push({
+        source: 'linkedin', ok: false, count: 0,
+        error: linkedInLoadError() ?? 'LinkedIn adapter not installed',
+      })
+    }
     let jobs: SourcedJob[] = []
 
     if (liRes.status === 'fulfilled') {
@@ -93,8 +103,12 @@ export async function GET(req: NextRequest) {
           remote: remote === 'remote',
         }
       })
-      jobs.push(...li)
-      if (wantLinkedIn) outcomes.push({ source: 'linkedin', ok: true, count: li.length })
+      // LinkedIn pads a thin result set with adjacent work, and from page 2 on
+      // it is the only source, so skipping this filter let unrelated roles
+      // through on every "load more".
+      const liRelevant = filterRelevant(li, query)
+      jobs.push(...liRelevant)
+      if (wantLinkedIn) outcomes.push({ source: 'linkedin', ok: true, count: liRelevant.length })
     } else if (wantLinkedIn) {
       outcomes.push({
         source: 'linkedin', ok: false, count: 0,

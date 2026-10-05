@@ -17,6 +17,8 @@ export interface JobCard {
 }
 
 export interface JobDetail extends JobCard {
+  /** Which board produced this, so the UI names the right site. */
+  source?: JobSourceId
   description: string | null
   seniority: string | null
   employmentType: string | null
@@ -49,6 +51,12 @@ export interface SourcedJob extends JobCard {
   remote: boolean
   /** What the posting says about sponsorship, where a description exists. */
   visa?: VisaSignal
+  /** Board tags. A speciality like "react" usually lives here, not in the
+   *  title, so relevance matching reads them too. */
+  keywords?: string[]
+  /** Posting body, where the board returns one. Stripped of markup and
+   *  capped, so it can ride along with every search result. */
+  description?: string | null
   /** Set by the API when the company holds a UK sponsor licence. */
   ukSponsor?: boolean
   ukSponsorMatchedAs?: string | null
@@ -109,6 +117,16 @@ function stripHtml(s?: string | null): string | null {
   return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || null
 }
 
+/** Board descriptions arrive as HTML and can run to tens of kilobytes. Strip
+ *  the markup and cap the length: this travels with every search result, and
+ *  the fit analysis does not need more than this. */
+const DESCRIPTION_LIMIT = 5000
+function summarise(raw?: string | null): string | null {
+  const text = stripHtml(raw)
+  if (!text) return null
+  return text.length > DESCRIPTION_LIMIT ? `${text.slice(0, DESCRIPTION_LIMIT)}…` : text
+}
+
 /** Per-source timeout so one slow board cannot stall the search. */
 async function getJson(url: string, ms = 9000): Promise<unknown> {
   const ctrl = new AbortController()
@@ -126,7 +144,7 @@ async function getJson(url: string, ms = 9000): Promise<unknown> {
 interface RemotiveJob {
   id: number; url: string; title: string; company_name: string
   candidate_required_location?: string; publication_date?: string
-  job_type?: string; description?: string
+  job_type?: string; description?: string; tags?: string[]
 }
 
 async function fromRemotive(query: string): Promise<SourcedJob[]> {
@@ -145,6 +163,8 @@ async function fromRemotive(query: string): Promise<SourcedJob[]> {
       date: isoDate(j.publication_date),
       url: j.url,
       source: 'remotive' as const,
+      description: summarise(j.description),
+      keywords: j.tags ?? [],
       eligibility: el.level,
       eligibilityNote: el.note,
       remote: true,
@@ -174,6 +194,7 @@ async function fromJobicy(query: string): Promise<SourcedJob[]> {
       date: isoDate(j.pubDate),
       url: j.url,
       source: 'jobicy' as const,
+      description: summarise(j.jobExcerpt),
       eligibility: el.level,
       eligibilityNote: el.note,
       remote: true,
@@ -211,6 +232,8 @@ async function fromRemoteOk(query: string): Promise<SourcedJob[]> {
         date: isoDate(j.date),
         url: j.url ?? j.apply_url ?? `https://remoteok.com/remote-jobs/${j.slug ?? j.id}`,
         source: 'remoteok' as const,
+      description: summarise(j.description),
+        keywords: j.tags ?? [],
         eligibility: el.level,
         eligibilityNote: el.note,
         remote: true,
@@ -252,6 +275,8 @@ async function fromArbeitnow(query: string): Promise<SourcedJob[]> {
         date: isoDate(j.created_at ?? null),
         url: j.url,
         source: 'arbeitnow' as const,
+      description: summarise(j.description),
+        keywords: j.tags ?? [],
         eligibility: el.level === 'africa-ok' ? 'africa-ok' : 'unknown' as Eligibility,
         eligibilityNote: j.location ?? null,
         remote: !!j.remote,
@@ -303,13 +328,86 @@ export async function searchRemoteBoards(
   return { jobs, outcomes }
 }
 
-/** Re-filters board results against the query — the boards match loosely. */
+// Words that describe an employment arrangement rather than the work. A
+// posting matching only on these is not a match: "full" would otherwise carry
+// every "Full-time Gardener" into a search for "full stack developer".
+const GENERIC_TERMS = new Set([
+  'job', 'jobs', 'role', 'roles', 'position', 'positions', 'vacancy', 'hiring',
+  'remote', 'onsite', 'on-site', 'hybrid', 'work', 'working',
+  'full', 'part', 'time', 'contract', 'permanent', 'freelance', 'temporary',
+  'senior', 'junior', 'mid', 'level', 'lead', 'staff', 'principal',
+  'entry', 'graduate', 'intern', 'internship', 'experienced',
+  'and', 'the', 'for', 'with', 'your', 'our',
+  // "software engineer" is a request for engineering work in general, not for
+  // postings that happen to contain the word "software".
+  'software',
+])
+
+/** What the canonical role noun collapses to; see ROLE_SYNONYMS. */
+const ROLE_NOUN = 'developer'
+
+// Boards spell the same role every possible way. Collapsing both the query and
+// the posting to one spelling is what makes "fullstack developer" find a job
+// titled "Full Stack Engineer" — previously it matched neither token.
+const ROLE_SYNONYMS: Record<string, string> = {
+  engineer: 'developer', engineering: 'developer', programmer: 'developer',
+  dev: 'developer', developer: 'developer',
+}
+
+/** Collapses spelling variants so both sides of a comparison agree. */
+function canonicalise(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9+#\s-]/g, ' ')
+    .replace(/[-_]+/g, ' ')
+    // ReactJS, React.js and "react js" all name the same technology.
+    // Without this, a search for "react" misses a posting titled
+    // "ReactJS Developer": no word boundary falls between react and js.
+    .replace(/\b(react|node|vue|next|angular|express|nest|ember)[\s.]?js\b/g, '$1')
+    .replace(/\bfull\s+stack\b/g, 'fullstack')
+    .replace(/\bfront\s+end\b/g, 'frontend')
+    .replace(/\bback\s+end\b/g, 'backend')
+    .replace(/\bdev\s+ops\b/g, 'devops')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(w => ROLE_SYNONYMS[w] ?? w)
+    .join(' ')
+}
+
+/**
+ * Re-filters results against the query — every source matches loosely.
+ *
+ * Remotive searches descriptions, so "fullstack developer" returns copywriters;
+ * Jobicy falls back to its whole feed when a tag does not resolve; LinkedIn
+ * pads a thin result set with whatever it considers adjacent. This is the one
+ * place that decides a posting is actually the work that was asked for.
+ */
 export function filterRelevant(jobs: SourcedJob[], query: string): SourcedJob[] {
-  const terms = query.toLowerCase().split(/\s+/).filter(t => t.length >= 3)
+  const terms = Array.from(
+    new Set(
+      canonicalise(query)
+        .split(' ')
+        .filter(t => t.length >= 3 && !GENERIC_TERMS.has(t)),
+    ),
+  )
+  // A query of nothing but generic words cannot discriminate; keep everything
+  // rather than silently returning an empty page.
   if (!terms.length) return jobs
+
+  // The role noun is far too weak to match on alone: every posting is some
+  // kind of engineer, so "fullstack developer" would return service-desk and
+  // hypervisor roles. When the query names a speciality, that is what has to
+  // match. Only a bare "developer" or "software engineer" falls back to it.
+  const specialities = terms.filter(t => t !== ROLE_NOUN)
+  const required = specialities.length ? specialities : terms
+
   return jobs.filter(j => {
-    const hay = `${j.title} ${j.company ?? ''}`.toLowerCase()
-    return terms.some(t => hay.includes(t))
+    const hay = canonicalise(
+      `${j.title ?? ''} ${j.company ?? ''} ${(j.keywords ?? []).join(' ')}`,
+    )
+    // Whole words only: substring matching lets "art" match "start".
+    return required.some(t => new RegExp(`\\b${t.replace(/[+#]/g, '\\$&')}\\b`).test(hay))
   })
 }
 

@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Zap, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, User } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, User } from 'lucide-react'
+import Logo from '@/components/Logo'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 
 type AuthMode = 'signin' | 'signup'
@@ -83,9 +84,7 @@ export default function AuthPage() {
 
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #7C5CFC, #F4633A)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Zap size={18} color="#fff" fill="white" />
-          </div>
+          <Logo size={38} />
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>HireKit</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.04em' }}>Job Application Suite</div>

@@ -1,11 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { BriefcaseBusiness, Sun, Moon, Monitor, LogOut } from 'lucide-react'
+import { Sun, Moon, Monitor, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/useTheme'
 import NotificationBell from './NotificationBell'
 import WindowControls, { useIsDesktopShell } from './WindowControls'
+import Logo from '../Logo'
 
 function IconButton({ label, onClick, title, children }: {
   label: string; onClick?: () => void; title?: string; children: React.ReactNode
@@ -88,15 +89,7 @@ export default function Header() {
     >
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginRight: 'auto', paddingLeft: 2 }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: 'var(--r-md)',
-          background: 'linear-gradient(135deg, var(--c-violet) 0%, var(--c-coral) 100%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: 'var(--shadow-accent)',
-        }}>
-          {/* Matches the app icon (design/icon.svg) and the loader mark. */}
-          <BriefcaseBusiness size={17} color="#fff" strokeWidth={2.3} />
-        </div>
+        <Logo size={34} />
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-chrome-text)', letterSpacing: '-0.03em', lineHeight: 1, fontFamily: 'var(--font-display)' }}>HireKit</div>
           <div style={{ fontSize: 10, color: 'var(--c-chrome-dim)', letterSpacing: '0.06em', marginTop: 1 }}>JOB SUITE</div>

@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { BriefcaseBusiness } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import Logo from '../Logo'
 import Header from './Header'
 import Sidebar from './Sidebar'
 
@@ -18,14 +18,7 @@ function AppLoader({ stage }: { stage: string }) {
     }}>
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, animation: 'hk-fadeUp 0.4s ease both' }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 14,
-          background: 'linear-gradient(135deg, var(--c-violet) 0%, var(--c-coral) 100%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: 'var(--shadow-accent)',
-        }}>
-          <BriefcaseBusiness size={23} color="#fff" strokeWidth={2.2} />
-        </div>
+        <Logo size={48} />
         <span style={{ fontSize: 25, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.04em', fontFamily: 'var(--font-display)' }}>
           HireKit
         </span>

@@ -54,6 +54,35 @@ export interface Project {
   featured: boolean
   published_to_portfolio: boolean
   created_at: string
+  /** pinned: main grid on the portfolio; published: secondary list;
+   *  hidden: HireKit only. featured / published_to_portfolio mirror it. */
+  visibility: ProjectVisibility
+  pin_order: number | null
+  category_id: string | null
+  blurb?: string | null
+  docs_url?: string | null
+  year?: string | null
+  source_key?: string | null
+}
+
+export type ProjectVisibility = 'pinned' | 'published' | 'hidden'
+
+export interface ProjectCategory {
+  id: string
+  name: string
+  sort_order: number
+}
+
+/** Owner's view of the portfolio link; never includes the token itself. */
+export interface PortfolioConnection {
+  site_url: string | null
+  token_hint: string | null
+  token_created_at: string | null
+  has_deploy_hook: boolean
+  deploy_hook_host: string | null
+  last_rebuild_at: string | null
+  last_rebuild_status: string | null
+  feed_base_url: string
 }
 
 export interface CoverLetter {

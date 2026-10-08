@@ -2,26 +2,39 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import useSWR from 'swr'
 import { useRouter } from 'next/navigation'
-import { Bell, BriefcaseBusiness, CalendarClock, AlarmClock, Clock, X, Check } from 'lucide-react'
+import { Bell, BriefcaseBusiness, CalendarClock, AlarmClock, Clock, X, Check, BellRing } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import type { CalendarEvent } from '@/lib/supabase'
 import {
   buildNotifications, readDismissed, writeDismissed,
-  type AppNotification, type ApplicationRow,
+  type AppNotification, type ApplicationRow, type AlertMatchSummary,
 } from '@/lib/notifications'
 
 const KEY = 'notification-sources'
 
-async function fetchSources(): Promise<{ events: CalendarEvent[]; applications: ApplicationRow[] }> {
+async function fetchSources(): Promise<{ events: CalendarEvent[]; applications: ApplicationRow[]; alerts: AlertMatchSummary[] }> {
   const supabase = createSupabaseBrowserClient()
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return { events: [], applications: [] }
+  if (!session) return { events: [], applications: [], alerts: [] }
 
-  const [ev, ap] = await Promise.all([
+  const [ev, ap, am] = await Promise.all([
     supabase.from('calendar_events').select('*'),
     supabase.from('job_applications').select('id,company,role,status,applied_date'),
+    // Missing table (migration not run yet) just means no alert items.
+    supabase.from('job_alert_matches').select('alert_id, found_at, job_alerts(name)').eq('seen', false).limit(500),
   ])
-  return { events: ev.data ?? [], applications: ap.data ?? [] }
+
+  const byAlert = new Map<string, AlertMatchSummary>()
+  for (const m of (am.data ?? []) as unknown as { alert_id: string; found_at: string; job_alerts: { name: string } | null }[]) {
+    const cur = byAlert.get(m.alert_id)
+    if (cur) {
+      cur.count++
+      if (m.found_at > cur.latest) cur.latest = m.found_at
+    } else {
+      byAlert.set(m.alert_id, { alertId: m.alert_id, name: m.job_alerts?.name ?? 'Job alert', count: 1, latest: m.found_at })
+    }
+  }
+  return { events: ev.data ?? [], applications: ap.data ?? [], alerts: Array.from(byAlert.values()) }
 }
 
 const ICONS: Record<AppNotification['kind'], React.ElementType> = {
@@ -29,6 +42,7 @@ const ICONS: Record<AppNotification['kind'], React.ElementType> = {
   deadline: AlarmClock,
   event: CalendarClock,
   'follow-up': Clock,
+  'job-alert': BellRing,
 }
 
 export default function NotificationBell() {
@@ -44,7 +58,7 @@ export default function NotificationBell() {
 
   const items = useMemo(() => {
     if (!data) return []
-    return buildNotifications(data.events, data.applications)
+    return buildNotifications(data.events, data.applications, new Date(), data.alerts)
       .filter(n => !dismissed.has(n.id))
   }, [data, dismissed])
 

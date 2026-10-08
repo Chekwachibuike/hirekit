@@ -1,10 +1,11 @@
-// Notification feed derived from calendar events and applications. Nothing is
-// stored or scheduled -- recomputed on read. Only answers "what needs attention
+// Notification feed derived from calendar events, applications and job-alert
+// matches. Nothing here is stored or scheduled -- recomputed on read (the
+// alert matches themselves are found by the daily job-alert run). Only answers "what needs attention
 // while the app is open"; reach-me-when-closed is a Google event reminder.
 import type { CalendarEvent } from './supabase'
 import { expandRecurrence, toISO } from './recurrence'
 
-export type NotificationKind = 'interview' | 'deadline' | 'event' | 'follow-up'
+export type NotificationKind = 'interview' | 'deadline' | 'event' | 'follow-up' | 'job-alert'
 
 export interface AppNotification {
   /** Stable across reloads, so dismissals survive. */
@@ -42,10 +43,21 @@ function whenLabel(days: number) {
   return `in ${days} days`
 }
 
+/** Unseen matches of one job alert. */
+export interface AlertMatchSummary {
+  alertId: string
+  name: string
+  count: number
+  /** Newest match; part of the id so a new batch is not hidden by an
+   *  earlier dismissal. */
+  latest: string
+}
+
 export function buildNotifications(
   events: CalendarEvent[],
   applications: ApplicationRow[],
   now = new Date(),
+  alerts: AlertMatchSummary[] = [],
 ): AppNotification[] {
   const from = toISO(now)
   const horizon = new Date(now.getTime() + LOOKAHEAD_DAYS * DAY)
@@ -97,6 +109,15 @@ export function buildNotifications(
       title: `${a.role} — ${a.company}`,
       detail: `Applied ${age} days ago with no update. Worth a follow-up.`,
       href: '/applications', date: a.applied_date, urgent: false,
+    })
+  }
+
+  for (const a of alerts) {
+    out.push({
+      id: `alert:${a.alertId}:${a.latest}`, kind: 'job-alert',
+      title: `${a.count} new job${a.count === 1 ? '' : 's'}: ${a.name}`,
+      detail: 'Found by your job alert. Open Job Search to see them.',
+      href: '/job-search?alerts=1', date: a.latest.slice(0, 10), urgent: true,
     })
   }
 

@@ -165,3 +165,23 @@ export function validateJobId(raw: string): Parsed<string> {
   const id = raw.trim()
   return /^\d{6,20}$/.test(id) ? { ok: true, value: id } : { ok: false, error: 'Invalid job id.' }
 }
+
+/** Back to a canonical query string: what a saved alert stores, so it never
+ *  keeps anything the validator would not have produced. Page and the
+ *  show-scams toggle are per-view, not part of the search. */
+export function toQueryString(p: SearchParams): string {
+  const q = new URLSearchParams({ q: p.query, mode: p.mode })
+  if (p.location) q.set('location', p.location)
+  if (p.workplace) q.set('remote', p.workplace)
+  if (p.jobage) q.set('jobage', String(p.jobage))
+  if (p.africaOnly) q.set('africaOnly', '1')
+  if (p.sponsorOnly) q.set('sponsorOnly', '1')
+  return q.toString()
+}
+
+const MODE_NAMES: Record<SearchMode, string> = { remote: 'Remote', nigeria: 'In Nigeria', relocation: 'Relocation' }
+
+/** "graduate trainee · In Nigeria · Lagos" */
+export function describeSearch(p: SearchParams): string {
+  return [p.query, MODE_NAMES[p.mode], p.location].filter(Boolean).join(' · ')
+}

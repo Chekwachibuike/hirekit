@@ -43,11 +43,11 @@ export interface JobSearchOptions {
 
 export type JobSourceId =
   | 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
-  | 'himalayas' | 'workingnomads' | 'weworkremotely' | 'hotnigerianjobs' | 'companies'
+  | 'himalayas' | 'workingnomads' | 'weworkremotely' | 'hotnigerianjobs' | 'jobzilla' | 'companies'
 
 export const ALL_SOURCES: JobSourceId[] = [
   'linkedin', 'remotive', 'jobicy', 'remoteok', 'arbeitnow',
-  'himalayas', 'workingnomads', 'weworkremotely', 'hotnigerianjobs', 'companies',
+  'himalayas', 'workingnomads', 'weworkremotely', 'hotnigerianjobs', 'jobzilla', 'companies',
 ]
 
 /** remote: work from Nigeria for anyone. nigeria: jobs based in Nigeria.
@@ -90,6 +90,7 @@ export const SOURCE_LABELS: Record<JobSourceId, string> = {
   workingnomads:   'Working Nomads',
   weworkremotely:  'We Work Remotely',
   hotnigerianjobs: 'HotNigerianJobs',
+  jobzilla:        'Jobzilla',
   companies:       'Company boards',
 }
 
@@ -99,7 +100,7 @@ export const SOURCE_LABELS: Record<JobSourceId, string> = {
  *  applyFilters keeps the part that fits the mode. */
 export const SOURCES_BY_MODE: Record<SearchMode, JobSourceId[]> = {
   remote:     ['linkedin', 'himalayas', 'remotive', 'jobicy', 'remoteok', 'workingnomads', 'weworkremotely', 'companies'],
-  nigeria:    ['linkedin', 'hotnigerianjobs', 'companies'],
+  nigeria:    ['linkedin', 'hotnigerianjobs', 'jobzilla', 'companies'],
   relocation: ['linkedin', 'arbeitnow', 'companies'],
 }
 
@@ -208,7 +209,22 @@ function stripHtml(s?: string | null): string | null {
  *  the fit analysis does not need more than this. */
 const DESCRIPTION_LIMIT = 5000
 function summarise(raw?: string | null): string | null {
-  const text = stripHtml(raw)
+  if (!raw) return null
+  // Keep paragraph and list structure as line breaks: the detail panel
+  // renders with pre-wrap, and collapsing everything to spaces turned every
+  // posting into one unbroken wall of text.
+  const text = decodeEntities(
+    raw
+      .replace(/<\s*br\s*\/?>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '\n• ')
+      .replace(/<\/(p|div|ul|ol|h[1-6]|tr|section)>/gi, '\n\n')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .split('\n')
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
   if (!text) return null
   return text.length > DESCRIPTION_LIMIT ? `${text.slice(0, DESCRIPTION_LIMIT)}…` : text
 }
@@ -282,7 +298,7 @@ function looselyMatches(query: string, ...texts: (string | null | undefined)[]):
   const terms = meaningfulTerms(query)
   if (!terms.length) return true
   const hay = canonicalise(texts.filter(Boolean).join(' '))
-  return terms.some(t => hay.includes(t))
+  return terms.some(t => expandTerm(t).some(a => hay.includes(a)))
 }
 
 // ── Remotive ──────────────────────────────────────────────────────
@@ -502,34 +518,50 @@ async function fromWeWorkRemotely(query: string): Promise<SourcedJob[]> {
     })
 }
 
-// ── HotNigerianJobs ───────────────────────────────────────────────
-// Nigeria's largest general job board, via its public RSS feed. Every job is
-// in Nigeria; titles read "Role at Company".
-async function fromHotNigerianJobs(query: string): Promise<SourcedJob[]> {
-  const items = await getRss('https://www.hotnigerianjobs.com/feed/rss.xml')
+// ── Nigerian job boards (RSS) ─────────────────────────────────────
+// HotNigerianJobs (Nigeria's largest general board) and Jobzilla, via their
+// public feeds. Every job is in Nigeria; titles read "Role at Company".
+//
+// Both also post one item per employer covering several roles: "Propetrol
+// Limited Job Recruitment (3 Positions)". The roles are only named in the
+// description, so for those the description's opening counts as keywords;
+// otherwise a "graduate trainee" opening inside one would never match.
+const MULTI_ROLE = /\b(recruitment|positions|vacancies|job opportunities|openings|hiring)\b/i
 
-  return items
-    .filter(i => looselyMatches(query, i.title))
-    .map(i => {
-      const m = i.title.match(/^(.*) at (.+)$/)
-      const workplace = inferWorkplace(i.title)
-      return {
-        id: `hotnigerianjobs:${i.link}`,
-        title: m ? m[1].trim() : i.title,
-        company: m ? m[2].trim() : null,
-        companyUrl: null,
-        location: 'Nigeria',
-        date: isoDate(i.pubDate),
-        url: i.link,
-        source: 'hotnigerianjobs' as const,
-        description: summarise(i.description),
-        eligibility: 'africa-ok' as const,
-        eligibilityNote: 'Based in Nigeria',
-        workplace,
-        remote: workplace === 'remote',
-      }
-    })
+function fromNigerianRss(source: 'hotnigerianjobs' | 'jobzilla', url: string) {
+  return async (query: string): Promise<SourcedJob[]> => {
+    const items = await getRss(url)
+    return items
+      .map(i => {
+        const roles = MULTI_ROLE.test(i.title) ? (stripHtml(i.description) ?? '').slice(0, 600) : ''
+        return { i, roles }
+      })
+      .filter(({ i, roles }) => looselyMatches(query, i.title, roles))
+      .map(({ i, roles }) => {
+        const m = i.title.match(/^(.*) at (.+)$/)
+        const workplace = inferWorkplace(i.title)
+        return {
+          id: `${source}:${i.link}`,
+          title: m ? m[1].trim() : i.title,
+          company: m ? m[2].trim() : null,
+          companyUrl: null,
+          location: 'Nigeria',
+          date: isoDate(i.pubDate),
+          url: i.link,
+          source,
+          description: summarise(i.description),
+          keywords: roles ? roles.split(/[\s,;:()]+/).filter(w => w.length > 2) : undefined,
+          eligibility: 'africa-ok' as const,
+          eligibilityNote: 'Based in Nigeria',
+          workplace,
+          remote: workplace === 'remote',
+        }
+      })
+  }
 }
+
+const fromHotNigerianJobs = fromNigerianRss('hotnigerianjobs', 'https://www.hotnigerianjobs.com/feed/rss.xml')
+const fromJobzilla = fromNigerianRss('jobzilla', 'https://www.jobzilla.ng/feed')
 
 // ── Arbeitnow ─────────────────────────────────────────────────────
 // Mostly on-site European roles, which is why it carries the relocation mode:
@@ -582,6 +614,23 @@ interface RawPosting {
 const COUNTRY_CODES: Record<string, string> = { ng: 'Nigeria', gb: 'United Kingdom', us: 'United States', ke: 'Kenya', gh: 'Ghana', za: 'South Africa' }
 const country = (c?: string | null) => (c ? COUNTRY_CODES[c.toLowerCase()] ?? c : '')
 const joinLoc = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(', ')
+
+/** "Posted Today" / "Posted Yesterday" / "Posted 3 Days Ago" / "Posted 30+ Days Ago". */
+function workdayPosted(s?: string): string | null {
+  if (!s) return null
+  const days = /today/i.test(s) ? 0 : /yesterday/i.test(s) ? 1 : Number(s.match(/(\d+)\+?\s+days?/i)?.[1] ?? NaN)
+  if (Number.isNaN(days)) return null
+  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
+}
+
+/** Workday writes Nigerian sites as "NG-PORT HARCOURT-125 TRANS-AMADI";
+ *  turn the country code into a name so location filters can read it. */
+function workdayLocation(s?: string): string {
+  const t = (s ?? '').trim()
+  const m = t.match(/^([A-Z]{2})-([^-]+)/)
+  if (m) return joinLoc(m[2].replace(/\b\w/g, c => c.toUpperCase()).replace(/\B\w+/g, w => w.toLowerCase()), country(m[1]))
+  return t
+}
 
 async function readBoard(b: CompanyBoard): Promise<RawPosting[]> {
   switch (b.ats) {
@@ -640,7 +689,8 @@ async function readBoard(b: CompanyBoard): Promise<RawPosting[]> {
       }))
     }
     case 'smartrecruiters': {
-      const d = await getJson(`https://api.smartrecruiters.com/v1/companies/${b.slug}/postings`) as {
+      const q = b.country ? `?country=${encodeURIComponent(b.country)}&limit=100` : ''
+      const d = await getJson(`https://api.smartrecruiters.com/v1/companies/${b.slug}/postings${q}`) as {
         content?: { id: string; name: string; releasedDate?: string; company?: { identifier?: string }
           location?: { city?: string; country?: string; remote?: boolean; hybrid?: boolean } }[]
       }
@@ -651,6 +701,34 @@ async function readBoard(b: CompanyBoard): Promise<RawPosting[]> {
         date: isoDate(j.releasedDate),
         workplace: j.location?.remote ? 'remote' : j.location?.hybrid ? 'hybrid' : 'onsite',
       }))
+    }
+    case 'workday': {
+      // Public endpoint behind every *.myworkdayjobs.com careers site. Pages
+      // of 20; the first answers how many there are, the rest load together.
+      if (!b.host || !b.site) return []
+      const api = `https://${b.host}/wday/cxs/${b.slug}/${b.site}/jobs`
+      type Page = { total?: number; jobPostings?: { title: string; externalPath: string; locationsText?: string; postedOn?: string; bulletFields?: string[] }[] }
+      const page = (offset: number) => getJson(api, 12000, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appliedFacets: {}, limit: 20, offset, searchText: b.search ?? '' }),
+      }) as Promise<Page>
+      const first = await page(0)
+      const total = Math.min(first.total ?? 0, 200)
+      const rest = await Promise.allSettled(
+        Array.from({ length: Math.max(0, Math.ceil(total / 20) - 1) }, (_, k) => page((k + 1) * 20)),
+      )
+      const posts = [first, ...rest.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []))]
+        .flatMap(pg => pg.jobPostings ?? [])
+      return posts.map(j => {
+        const location = workdayLocation(j.locationsText)
+        return {
+          id: j.externalPath, title: j.title, location,
+          url: `https://${b.host}/en-US/${b.site}${j.externalPath}`,
+          date: workdayPosted(j.postedOn),
+          workplace: inferWorkplace(location, j.title),
+        }
+      })
     }
     case 'breezy': {
       const d = await getJson(`https://${b.slug}.breezy.hr/json`) as {
@@ -712,6 +790,7 @@ const ADAPTERS: Record<Exclude<JobSourceId, 'linkedin'>, (q: string) => Promise<
   workingnomads: fromWorkingNomads,
   weworkremotely: fromWeWorkRemotely,
   hotnigerianjobs: fromHotNigerianJobs,
+  jobzilla: fromJobzilla,
   companies: fromCompanies,
 }
 
@@ -759,8 +838,7 @@ const GENERIC_TERMS = new Set([
   'job', 'jobs', 'role', 'roles', 'position', 'positions', 'vacancy', 'hiring',
   'remote', 'onsite', 'on-site', 'hybrid', 'work', 'working',
   'full', 'part', 'time', 'contract', 'permanent', 'freelance', 'temporary',
-  'senior', 'junior', 'mid', 'level', 'lead', 'staff', 'principal',
-  'entry', 'graduate', 'intern', 'internship', 'experienced',
+  'senior', 'junior', 'mid', 'level', 'lead', 'staff', 'principal', 'experienced',
   'and', 'the', 'for', 'with', 'your', 'our',
   'nigeria', 'lagos', 'abuja', 'africa',
   // "software engineer" is a request for engineering work in general, not for
@@ -777,6 +855,49 @@ const ROLE_NOUN = 'developer'
 const ROLE_SYNONYMS: Record<string, string> = {
   engineer: 'developer', engineering: 'developer', programmer: 'developer',
   dev: 'developer', developer: 'developer', developers: 'developer', engineers: 'developer',
+  // Plurals of the level words, so "graduate trainees" finds "Graduate Trainee".
+  graduates: 'graduate', trainees: 'trainee', interns: 'intern', internship: 'intern', internships: 'intern',
+  apprentices: 'apprentice', apprenticeship: 'apprentice', apprenticeships: 'apprentice',
+}
+
+/** Career-stage words. A search containing one must match one, on top of
+ *  the discipline: "electrical graduate trainee" is a trainee role in
+ *  electrical work, not any trainee role and not any electrical role. */
+const LEVEL_TERMS = new Set([
+  'graduate', 'trainee', 'intern', 'internship', 'entry', 'apprentice', 'apprenticeship',
+  'nysc', 'siwes', 'fresher',
+])
+
+/** Nouns too broad to match on by themselves: "developer" (every software
+ *  job) and "engr" (every non-software engineer; see canonicalise). */
+const WEAK_NOUNS = new Set(['developer', 'engr'])
+
+/** Industry words a posting rarely uses verbatim: "oil and gas" roles are
+ *  titled "Drilling Supervisor" at "Propetrol". A search term on the left
+ *  matches any word on the right. */
+const INDUSTRY_ALIASES: Record<string, string[]> = (() => {
+  // Kept to words that only mean oil and gas. "energy" (Octopus Energy's
+  // data analysts), "onshore" (crypto "onshore markets") and "hse" (every
+  // safety role) let unrelated work through.
+  const oilGas = ['oil', 'gas', 'petroleum', 'upstream', 'downstream', 'midstream', 'offshore',
+    'drilling', 'refinery', 'refining', 'lng', 'pipeline', 'pipelines', 'exploration', 'subsea', 'rig', 'reservoir',
+    'wellsite', 'completions', 'petrochemical']
+  const power = ['power', 'energy', 'electrical', 'electricity', 'substation', 'transmission', 'generation', 'solar', 'utilities', 'grid']
+  const telecom = ['telecom', 'telecoms', 'telecommunication', 'telecommunications', 'rf', 'network', 'tower', 'fibre', 'fiber']
+  return {
+    oil: oilGas, gas: oilGas, petroleum: oilGas, upstream: oilGas, downstream: oilGas,
+    energy: [...power, 'oil', 'gas', 'renewable', 'renewables'],
+    power, electricity: power,
+    renewable: ['renewable', 'renewables', 'solar', 'wind', 'energy'], renewables: ['renewable', 'renewables', 'solar', 'wind', 'energy'],
+    telecom, telecoms: telecom, telecommunication: telecom, telecommunications: telecom,
+    mining: ['mining', 'mine', 'minerals', 'quarry', 'geologist', 'geology'],
+    construction: ['construction', 'civil', 'building', 'site', 'structural', 'quantity'],
+  }
+})()
+
+/** What one search term accepts in a posting. */
+function expandTerm(t: string): string[] {
+  return INDUSTRY_ALIASES[t] ?? [t]
 }
 
 /** Collapses spelling variants so both sides of a comparison agree. */
@@ -837,27 +958,41 @@ export function filterRelevant(jobs: SourcedJob[], query: string): SourcedJob[] 
   // rejects those, so this only guards direct callers.
   if (!terms.length) return jobs
 
-  // The role noun is far too weak to match on alone: every posting is some
-  // kind of engineer, so "fullstack developer" would return service-desk and
-  // hypervisor roles. When the query names a speciality, that is what has to
-  // match. Only a bare "developer" or "software engineer" falls back to it.
-  const specialities = terms.filter(t => t !== ROLE_NOUN)
-  const required = specialities.length ? specialities : terms
+  // Three kinds of term, matched differently:
+  //   level    — graduate, trainee, intern…: one must match
+  //   subject  — the discipline or speciality (react, electrical, oil…):
+  //              one must match, through industry aliases
+  //   weak     — the bare role noun: far too broad on its own ("fullstack
+  //              developer" would return service-desk roles), so it only
+  //              decides anything when nothing else was asked for
+  const level = terms.filter(t => LEVEL_TERMS.has(t))
+  const subject = terms.filter(t => !LEVEL_TERMS.has(t) && !WEAK_NOUNS.has(t))
+  const nounOnly = !subject.length && terms.some(t => WEAK_NOUNS.has(t))
+  // "software engineer", "developer": software work specifically. A plain
+  // "engineer" or "graduate engineer" means any engineering discipline.
+  const softwareIntent = /\b(software|developer|developers|programmer|dev|coder)\b/i.test(query)
 
-  // Bare "developer" / "software engineer": "engineer" alone would admit HVAC
-  // and service engineers, and a company name like "X Engineering" would
-  // admit its CFO. Require the title itself to name software work.
-  if (!specialities.length) {
-    return jobs.filter(j => SOFTWARE_TITLE.test(j.title ?? '') && !NON_SOFTWARE_TITLE.test(j.title ?? ''))
-  }
+  const word = (t: string) => new RegExp(`(?<![a-z0-9+#])${t.replace(/[+#]/g, '\\$&')}(?![a-z0-9+#])`)
 
   return jobs.filter(j => {
-    const hay = canonicalise(
-      `${j.title ?? ''} ${j.company ?? ''} ${(j.keywords ?? []).join(' ')}`,
-    )
+    const title = j.title ?? ''
+    const keywords = (j.keywords ?? []).join(' ')
     // Whole words only: substring matching lets "art" match "start". The
     // lookarounds stand in for \b, which never matches after "#" or "+".
-    return required.some(t => new RegExp(`(?<![a-z0-9+#])${t.replace(/[+#]/g, '\\$&')}(?![a-z0-9+#])`).test(hay))
+    const hay = canonicalise(`${title} ${j.company ?? ''} ${keywords}`)
+
+    if (subject.length && !subject.some(t => expandTerm(t).some(a => word(a).test(hay)))) return false
+    if (level.length && !level.some(t => word(t).test(hay))) return false
+
+    if (nounOnly) {
+      if (softwareIntent) {
+        // "engineer" alone would admit HVAC and service engineers, and a
+        // company called "X Engineering" would admit its CFO.
+        return SOFTWARE_TITLE.test(title) && !NON_SOFTWARE_TITLE.test(title)
+      }
+      return /\b(engineer\w*|technician|technologist)\b/i.test(`${title} ${keywords}`)
+    }
+    return true
   })
 }
 

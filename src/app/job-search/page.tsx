@@ -1,12 +1,13 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePersistentState } from '@/lib/usePersistentState'
 import { requestCvTailor, MIN_DESCRIPTION_CHARS } from '@/lib/cv-tailor-handoff'
+import JobAlertsPanel, { type JobAlert } from '@/components/JobAlertsPanel'
 import useSWR from 'swr'
 import {
   Search, Loader2, MapPin, Building2, Clock, ExternalLink,
-  BriefcaseBusiness, Plus, Check, Sparkles, X, ShieldAlert, ShieldCheck, FileText,
+  BriefcaseBusiness, Plus, Check, Sparkles, X, ShieldAlert, ShieldCheck, FileText, BellRing, BellPlus,
 } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
 import { validateQuery, validateLocation, QUERY_MAX, LOCATION_MAX } from '@/lib/job-search-params'
@@ -15,7 +16,7 @@ import { validateQuery, validateLocation, QUERY_MAX, LOCATION_MAX } from '@/lib/
 // itself is server-only so we don't import from it here)
 type JobSourceId =
   | 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
-  | 'himalayas' | 'workingnomads' | 'weworkremotely' | 'hotnigerianjobs' | 'companies'
+  | 'himalayas' | 'workingnomads' | 'weworkremotely' | 'hotnigerianjobs' | 'jobzilla' | 'companies'
 type SearchMode = 'remote' | 'nigeria' | 'relocation'
 type RiskLevel = 'verified' | 'ok' | 'caution' | 'suspicious'
 type Eligibility = 'africa-ok' | 'restricted' | 'unknown'
@@ -60,6 +61,7 @@ const SOURCE_LABELS: Record<JobSourceId, string> = {
   workingnomads: 'Working Nomads',
   weworkremotely: 'We Work Remotely',
   hotnigerianjobs: 'HotNigerianJobs',
+  jobzilla: 'Jobzilla',
   companies: 'Company boards',
 }
 
@@ -71,7 +73,7 @@ const MODE_LABELS: Record<SearchMode, { label: string; hint: string }> = {
 
 const RISK_BADGE: Record<Exclude<RiskLevel, 'ok'>, { label: string; color: string; bg: string }> = {
   verified:   { label: 'Verified employer', color: 'var(--c-teal)', bg: 'rgba(0,168,133,0.1)' },
-  caution:    { label: 'Check carefully', color: '#b45309', bg: 'rgba(245,158,11,0.12)' },
+  caution:    { label: 'Check carefully', color: 'var(--c-amber)', bg: 'color-mix(in srgb, var(--c-amber) 13%, transparent)' },
   suspicious: { label: 'Possible scam', color: 'var(--c-red)', bg: 'var(--c-red-dim)' },
 }
 
@@ -174,6 +176,25 @@ export default function JobSearchPage() {
 
   // Tailor CV: id of the job whose description is being fetched first
   const [tailoring, setTailoring] = usePersistentState<string | null>('jobSearch.tailoring', null, { session: false })
+
+  // Job alerts: saved searches checked daily (see /api/cron/job-alerts)
+  const { data: alertData, mutate: mutateAlerts } =
+    useSWR<{ data: JobAlert[]; emailConfigured: boolean }>('/api/job-alerts', fetcher)
+  const alerts = alertData?.data ?? []
+  const newAlertCount = alerts.reduce((n, a) => n + a.newCount, 0)
+  const [alertsOpen, setAlertsOpen] = useState(false)
+  const [savingAlert, setSavingAlert] = useState(false)
+  const [alertNote, setAlertNote] = useState<string | null>(null)
+  const [runPending, setRunPending] = useState(false)
+
+  // The bell links here with ?alerts=1. window.location rather than
+  // useSearchParams keeps the page statically prerendered.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('alerts') === '1') {
+      setAlertsOpen(true)
+      window.history.replaceState({}, '', '/job-search')
+    }
+  }, [])
   const router = useRouter()
   // Warm the CV builder so the hand-off is a page swap, not a cold load.
   useEffect(() => { router.prefetch('/cv-builder') }, [router])
@@ -233,6 +254,46 @@ export default function JobSearchPage() {
       setSearching(false)
     }
   }
+
+  async function saveAlert() {
+    if (!canSearch || savingAlert) return
+    setSavingAlert(true); setAlertNote(null); setError(null)
+    try {
+      const res = await fetch('/api/job-alerts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ params: buildParams(1).toString() }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Could not save the alert')
+      setAlertNote(`Alert saved. ${json.openNow ? `${json.openNow} matching job${json.openNow === 1 ? ' is' : 's are'} open now; ` : ''}you'll be told about new ones each morning.`)
+      mutateAlerts()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the alert')
+    } finally {
+      setSavingAlert(false)
+    }
+  }
+
+  // "Run this search" from an alert: load its settings, then search once
+  // the state has applied.
+  function runAlert(params: string) {
+    const q = new URLSearchParams(params)
+    setQuery(q.get('q') ?? '')
+    setLocation(q.get('location') ?? '')
+    const m = q.get('mode')
+    setMode(m === 'nigeria' || m === 'relocation' ? m : 'remote')
+    const w = q.get('remote')
+    setRemote(w === 'remote' || w === 'hybrid' || w === 'onsite' ? w : '')
+    setJobage(Number(q.get('jobage') ?? 0) || 0)
+    setAfricaOnly(q.get('africaOnly') === '1')
+    setSponsorOnly(q.get('sponsorOnly') === '1')
+    setRunPending(true)
+  }
+  useEffect(() => {
+    if (runPending && canSearch) { setRunPending(false); search() }
+    // search reads the state set by runAlert; it must run after that render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runPending, canSearch])
 
   async function loadMore() {
     const next = page + 1
@@ -308,7 +369,7 @@ export default function JobSearchPage() {
           status: 'draft',
           applied_date: new Date().toISOString().slice(0, 10),
           job_url: job.url,
-          notes: `Found via HireKit Job Search (LinkedIn #${job.id})`,
+          notes: `Found via HireKit Job Search on ${job.source ? SOURCE_LABELS[job.source] : 'LinkedIn'}`,
         }),
       })
       if (res.ok) setAdded(s => (s.includes(job.id) ? s : [...s, job.id]))
@@ -346,10 +407,34 @@ export default function JobSearchPage() {
     <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Header */}
-      <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Job Search</h1>
-        <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>Live LinkedIn listings — no account needed · matched against your skills</p>
+      <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Job Search</h1>
+          <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>LinkedIn, remote and Nigerian job boards, and the hiring pages of tech, energy and engineering employers — filtered for who can apply, checked for scams</p>
+        </div>
+        <button onClick={() => setAlertsOpen(o => !o)} aria-expanded={alertsOpen}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 'var(--r-md)', flexShrink: 0,
+            background: alertsOpen ? 'var(--c-violet-dim)' : 'var(--c-bg-2)', border: '1px solid var(--c-border-md)',
+            color: alertsOpen ? 'var(--c-violet)' : 'var(--c-text)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)',
+          }}>
+          <BellRing size={14} /> Alerts
+          {newAlertCount > 0 && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--c-violet)', color: '#fff' }}>{newAlertCount}</span>
+          )}
+        </button>
       </div>
+
+      {alertsOpen && (
+        <JobAlertsPanel
+          alerts={alerts}
+          emailConfigured={!!alertData?.emailConfigured}
+          sourceLabel={s => (s && s in SOURCE_LABELS ? SOURCE_LABELS[s as JobSourceId] : s)}
+          onChanged={() => mutateAlerts()}
+          onRun={params => { setAlertsOpen(false); runAlert(params) }}
+          onClose={() => setAlertsOpen(false)}
+        />
+      )}
 
       {/* Search bar */}
       <div style={{ padding: '14px 32px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -360,7 +445,7 @@ export default function JobSearchPage() {
             onChange={e => setQuery(e.target.value)}
             maxLength={QUERY_MAX}
             onKeyDown={e => e.key === 'Enter' && search()}
-            placeholder="Keywords — e.g. React developer, fullstack, Python…"
+            placeholder="Keywords — e.g. React developer, electrical engineer, graduate trainee, oil and gas…"
             aria-label="Search keywords"
             style={{ flex: 1, padding: '9px 0', background: 'none', border: 'none', outline: 'none', color: 'var(--c-text)', fontSize: 13, fontFamily: 'var(--font-body)' }}
           />
@@ -393,13 +478,28 @@ export default function JobSearchPage() {
             display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px',
             borderRadius: 'var(--r-md)',
             background: !canSearch ? 'var(--c-bg-4)' : 'var(--c-coral)',
-            border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
+            border: 'none', color: !canSearch ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600,
             cursor: !canSearch ? 'default' : 'pointer',
             fontFamily: 'var(--font-body)',
           }}>
           {searching ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={14} />}
           Search
         </button>
+        <button onClick={saveAlert} disabled={!canSearch || savingAlert}
+          title="Save this search and get told each morning when new matching jobs are posted"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 'var(--r-md)',
+            background: 'var(--c-bg-2)', border: '1px solid var(--c-border-md)',
+            color: !canSearch ? 'var(--c-text-dim)' : 'var(--c-text)', fontSize: 13, fontWeight: 600,
+            cursor: !canSearch ? 'default' : 'pointer', fontFamily: 'var(--font-body)',
+          }}>
+          {savingAlert ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <BellPlus size={14} />}
+          Alert me
+        </button>
+
+        {/* Row break: the mode and its toggles sit together on the second
+            line, instead of wrapping one stray checkbox at a time. */}
+        <div aria-hidden style={{ flexBasis: '100%', height: 0 }} />
 
         {/* Remote vs relocation are different searches: different sources, and
             sponsorship only means anything when moving country. */}
@@ -505,9 +605,16 @@ export default function JobSearchPage() {
         </div>
       )}
 
+      {alertNote && (
+        <div role="status" style={{ margin: '12px 32px 0', fontSize: 12, color: 'var(--c-teal)', background: 'var(--c-teal-dim)', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+          <span>{alertNote}</span>
+          <button aria-label="Dismiss" onClick={() => setAlertNote(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>
+        </div>
+      )}
+
       {/* A form problem is shown live, ahead of any earlier server error. */}
       {(formError || error) && (
-        <div role="alert" style={{ margin: '12px 32px 0', fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0 }}>
+        <div role="alert" style={{ margin: '12px 32px 0', fontSize: 12, color: 'var(--c-danger-text)', background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0 }}>
           {formError ?? error}
         </div>
       )}
@@ -733,7 +840,7 @@ export default function JobSearchPage() {
               </button>
             )}
             {fitError && (
-              <div style={{ fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '8px 12px', marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--c-danger-text)', background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', borderRadius: 'var(--r-md)', padding: '8px 12px', marginBottom: 16 }}>
                 {fitError}
               </div>
             )}
@@ -809,9 +916,9 @@ export default function JobSearchPage() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center',
                   padding: '9px 14px', borderRadius: 'var(--r-md)',
-                  background: added.includes(detail.id) ? 'rgba(0,168,133,0.1)' : 'var(--c-violet)',
-                  border: added.includes(detail.id) ? '1px solid rgba(0,168,133,0.25)' : 'none',
-                  color: added.includes(detail.id) ? 'var(--c-teal)' : '#fff',
+                  background: added.includes(detail.id) ? 'rgba(0,168,133,0.1)' : 'var(--c-bg-2)',
+                  border: added.includes(detail.id) ? '1px solid rgba(0,168,133,0.25)' : '1px solid var(--c-border-md)',
+                  color: added.includes(detail.id) ? 'var(--c-teal)' : 'var(--c-text)',
                   fontSize: 12, fontWeight: 600,
                   cursor: added.includes(detail.id) ? 'default' : 'pointer',
                   fontFamily: 'var(--font-body)',

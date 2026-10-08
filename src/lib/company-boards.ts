@@ -1,5 +1,6 @@
-// Employers worth watching directly as a Nigerian developer: Nigerian tech
-// companies, and remote-first ones whose roles are open to Nigeria. Each
+// Employers worth watching directly from Nigeria: Nigerian tech companies,
+// remote-first ones whose roles are open to Nigeria, and the energy and
+// engineering employers behind most graduate-trainee programmes. Each
 // publishes openings through an applicant-tracking system with a public JSON
 // feed, so they are read straight from the source rather than via a board.
 //
@@ -14,7 +15,7 @@
 // PiggyVest, Opay) run their own careers pages with no public feed, so they
 // are absent here; LinkedIn and HotNigerianJobs pick up much of their hiring.
 
-export type Ats = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'smartrecruiters' | 'breezy'
+export type Ats = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'smartrecruiters' | 'breezy' | 'workday'
 
 export interface CompanyBoard {
   name: string
@@ -22,6 +23,14 @@ export interface CompanyBoard {
   slug: string
   /** Why this employer is on the list, for anyone maintaining it. */
   note: string
+  /** Workday only: the careers host and site, e.g. shell.wd3.myworkdayjobs.com + ShellCareers. */
+  host?: string
+  site?: string
+  /** Narrows a large global board server-side: Workday search text, or a
+   *  SmartRecruiters country code. Without it a 700-role board would be
+   *  read in full on every search. */
+  search?: string
+  country?: string
 }
 
 export const COMPANY_BOARDS: CompanyBoard[] = [
@@ -57,6 +66,17 @@ export const COMPANY_BOARDS: CompanyBoard[] = [
   { name: 'Turing', ats: 'greenhouse', slug: 'turing', note: 'Global remote engineering marketplace' },
   { name: 'Toptal', ats: 'lever', slug: 'toptal', note: 'Remote talent network; some staff roles Anywhere/EMEA' },
   { name: 'Invisible Technologies', ats: 'greenhouse', slug: 'invisible', note: 'AI-training work; open talent pools listed Worldwide' },
+  // ── Energy, engineering and graduate employers ─────────────────
+  // Global boards: Nigerian roles appear here when they are posted (the
+  // daily job alerts catch them), and roles abroad feed Relocation mode.
+  // Shell and Chevron currently list no Nigerian roles; their boards are
+  // small enough (~150) to read whole. Baker Hughes (~700) and Unilever are
+  // narrowed to Nigeria.
+  { name: 'Shell', ats: 'workday', slug: 'shell', host: 'shell.wd3.myworkdayjobs.com', site: 'ShellCareers', note: 'Oil & gas; graduate programmes and engineering roles' },
+  { name: 'Chevron', ats: 'workday', slug: 'chevron', host: 'chevron.wd5.myworkdayjobs.com', site: 'jobs', note: 'Oil & gas; engineering roles worldwide' },
+  { name: 'Baker Hughes', ats: 'workday', slug: 'bakerhughes', host: 'bakerhughes.wd5.myworkdayjobs.com', site: 'BakerHughes', search: 'Nigeria', note: 'Oilfield services; Port Harcourt and Lagos field roles' },
+  { name: 'Unilever', ats: 'workday', slug: 'unilever', host: 'unilever.wd3.myworkdayjobs.com', site: 'Unilever_Experienced_Professionals', search: 'Nigeria', note: 'FMCG; Lagos roles' },
+  { name: 'Bosch', ats: 'smartrecruiters', slug: 'BoschGroup', country: 'ng', note: 'Engineering and technology; Nigerian roles only' },
   // ── Relocation ─────────────────────────────────────────────────
   { name: 'Stripe', ats: 'greenhouse', slug: 'stripe', note: "Paystack's parent; sponsors visas for roles abroad" },
 ]

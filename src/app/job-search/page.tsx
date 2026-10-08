@@ -1,16 +1,23 @@
 'use client'
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { usePersistentState } from '@/lib/usePersistentState'
+import { requestCvTailor, MIN_DESCRIPTION_CHARS } from '@/lib/cv-tailor-handoff'
 import useSWR from 'swr'
 import {
   Search, Loader2, MapPin, Building2, Clock, ExternalLink,
-  BriefcaseBusiness, Plus, Check, Sparkles, X,
+  BriefcaseBusiness, Plus, Check, Sparkles, X, ShieldAlert, ShieldCheck, FileText,
 } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
+import { validateQuery, validateLocation, QUERY_MAX, LOCATION_MAX } from '@/lib/job-search-params'
 
 // Mirrors JobCard / JobDetail in src/lib/linkedin.ts (client copy — the lib
 // itself is server-only so we don't import from it here)
-type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
-type SearchMode = 'remote' | 'relocation'
+type JobSourceId =
+  | 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
+  | 'himalayas' | 'workingnomads' | 'weworkremotely' | 'hotnigerianjobs' | 'companies'
+type SearchMode = 'remote' | 'nigeria' | 'relocation'
+type RiskLevel = 'verified' | 'ok' | 'caution' | 'suspicious'
 type Eligibility = 'africa-ok' | 'restricted' | 'unknown'
 
 interface JobCard {
@@ -32,6 +39,8 @@ interface JobCard {
   /** Company holds a UK Skilled Worker sponsor licence. */
   ukSponsor?: boolean
   ukSponsorMatchedAs?: string | null
+  /** Scam check: level plus the red flags behind it. */
+  risk?: { level: RiskLevel; reasons: string[] }
 }
 
 interface SourceOutcome {
@@ -47,6 +56,36 @@ const SOURCE_LABELS: Record<JobSourceId, string> = {
   jobicy: 'Jobicy',
   remoteok: 'RemoteOK',
   arbeitnow: 'Arbeitnow',
+  himalayas: 'Himalayas',
+  workingnomads: 'Working Nomads',
+  weworkremotely: 'We Work Remotely',
+  hotnigerianjobs: 'HotNigerianJobs',
+  companies: 'Company boards',
+}
+
+const MODE_LABELS: Record<SearchMode, { label: string; hint: string }> = {
+  remote:     { label: 'Remote', hint: 'Remote roles you can do from Nigeria, from global boards and remote-first employers' },
+  nigeria:    { label: 'In Nigeria', hint: 'Jobs based in Nigeria: Nigerian job boards and tech companies, plus remote roles open to Nigeria' },
+  relocation: { label: 'Relocation', hint: 'On-site roles abroad, checked against the UK sponsor register' },
+}
+
+const RISK_BADGE: Record<Exclude<RiskLevel, 'ok'>, { label: string; color: string; bg: string }> = {
+  verified:   { label: 'Verified employer', color: 'var(--c-teal)', bg: 'rgba(0,168,133,0.1)' },
+  caution:    { label: 'Check carefully', color: '#b45309', bg: 'rgba(245,158,11,0.12)' },
+  suspicious: { label: 'Possible scam', color: 'var(--c-red)', bg: 'var(--c-red-dim)' },
+}
+
+function RiskBadge({ risk }: { risk?: JobCard['risk'] }) {
+  if (!risk || risk.level === 'ok') return null
+  const b = RISK_BADGE[risk.level]
+  const tip = risk.level === 'verified'
+    ? "Read straight from the employer's own hiring system, or a licensed UK sponsor"
+    : `Red flags: ${risk.reasons.join('; ')}`
+  return (
+    <span title={tip} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 999, background: b.bg, color: b.color, fontWeight: 600, fontSize: 10 }}>
+      {risk.level === 'verified' ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />} {b.label}
+    </span>
+  )
 }
 interface JobDetail extends JobCard {
   description: string | null
@@ -95,53 +134,84 @@ export default function JobSearchPage() {
   const { data: infoData } = useSWR<{ data: { skills?: string[] } | null }>('/api/personal-info', fetcher)
   const skills: string[] = Array.isArray(infoData?.data?.skills) ? infoData!.data!.skills! : []
 
-  // Search form
-  const [query, setQuery]       = useState('')
-  const [location, setLocation] = useState('')
-  const [remote, setRemote]     = useState<Remote>('')
-  const [jobage, setJobage]     = useState(7)
-  const [africaOnly, setAfricaOnly] = useState(true)
-  const [mode, setMode] = useState<SearchMode>('remote')
-  const [sponsorOnly, setSponsorOnly] = useState(false)
-  const [sponsorCount, setSponsorCount] = useState(0)
-  const [sponsorAsOf, setSponsorAsOf] = useState<string | null>(null)
-  const [sourceOutcomes, setSourceOutcomes] = useState<SourceOutcome[]>([])
-  const [eligibleCount, setEligibleCount]   = useState(0)
+  // Search form. Everything here is kept across page changes (see
+  // usePersistentState); only in-flight flags are memory-only.
+  const [query, setQuery]       = usePersistentState('jobSearch.query', '')
+  const [location, setLocation] = usePersistentState('jobSearch.location', '')
+  const [remote, setRemote]     = usePersistentState<Remote>('jobSearch.remote', '')
+  const [jobage, setJobage]     = usePersistentState('jobSearch.jobage', 7)
+  const [africaOnly, setAfricaOnly] = usePersistentState('jobSearch.africaOnly', true)
+  const [mode, setMode] = usePersistentState<SearchMode>('jobSearch.mode', 'remote')
+  const [sponsorOnly, setSponsorOnly] = usePersistentState('jobSearch.sponsorOnly', false)
+  const [sponsorCount, setSponsorCount] = usePersistentState('jobSearch.sponsorCount', 0)
+  const [sponsorAsOf, setSponsorAsOf] = usePersistentState<string | null>('jobSearch.sponsorAsOf', null)
+  const [showRisky, setShowRisky] = usePersistentState('jobSearch.showRisky', false)
+  const [suspiciousCount, setSuspiciousCount] = usePersistentState('jobSearch.suspiciousCount', 0)
+  const [sourceOutcomes, setSourceOutcomes] = usePersistentState<SourceOutcome[]>('jobSearch.sourceOutcomes', [])
+  const [eligibleCount, setEligibleCount]   = usePersistentState('jobSearch.eligibleCount', 0)
 
   // Results
-  const [results, setResults]   = useState<JobCard[]>([])
-  const [page, setPage]         = useState(1)
-  const [searching, setSearching] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [searched, setSearched] = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [results, setResults]   = usePersistentState<JobCard[]>('jobSearch.results', [])
+  const [page, setPage]         = usePersistentState('jobSearch.page', 1)
+  const [searching, setSearching] = usePersistentState('jobSearch.searching', false, { session: false })
+  const [loadingMore, setLoadingMore] = usePersistentState('jobSearch.loadingMore', false, { session: false })
+  const [searched, setSearched] = usePersistentState('jobSearch.searched', false)
+  const [error, setError]       = usePersistentState<string | null>('jobSearch.error', null)
 
   // Detail panel
-  const [detail, setDetail]         = useState<JobDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState<string | null>(null)
+  const [detail, setDetail]         = usePersistentState<JobDetail | null>('jobSearch.detail', null)
+  const [detailLoading, setDetailLoading] = usePersistentState<string | null>('jobSearch.detailLoading', null, { session: false })
 
-  // Track jobs already added to the Applications board this session
-  const [added, setAdded]   = useState<Set<string>>(new Set())
-  const [adding, setAdding] = useState<string | null>(null)
+  // Jobs already added to the Applications board (an array: a Set does not
+  // survive JSON in sessionStorage)
+  const [added, setAdded]   = usePersistentState<string[]>('jobSearch.added', [])
+  const [adding, setAdding] = usePersistentState<string | null>('jobSearch.adding', null, { session: false })
 
   // AI fit analysis — cached per job id so re-opening a job doesn't re-pay the AI call
-  const [fitCache, setFitCache]   = useState<Record<string, FitAnalysis>>({})
-  const [analyzing, setAnalyzing] = useState(false)
-  const [fitError, setFitError]   = useState<string | null>(null)
+  const [fitCache, setFitCache]   = usePersistentState<Record<string, FitAnalysis>>('jobSearch.fitCache', {})
+  const [analyzing, setAnalyzing] = usePersistentState('jobSearch.analyzing', false, { session: false })
+  const [fitError, setFitError]   = usePersistentState<string | null>('jobSearch.fitError', null)
+
+  // Tailor CV: id of the job whose description is being fetched first
+  const [tailoring, setTailoring] = usePersistentState<string | null>('jobSearch.tailoring', null, { session: false })
+  const router = useRouter()
+  // Warm the CV builder so the hand-off is a page swap, not a cold load.
+  useEffect(() => { router.prefetch('/cv-builder') }, [router])
+
+  // Same rules the API enforces, checked before sending so a typo is
+  // explained here instead of costing a round trip.
+  const queryCheck = validateQuery(query)
+  const locationCheck = validateLocation(location)
+  const formError = query.trim() && !queryCheck.ok ? queryCheck.error
+    : !locationCheck.ok ? locationCheck.error
+    : null
+  const canSearch = queryCheck.ok && locationCheck.ok && !searching
+
+  // Remote mode is remote work by definition, and relocation means moving,
+  // so each mode only offers the workplace options that make sense in it.
+  function changeMode(m: SearchMode) {
+    setMode(m)
+    if (m === 'remote') setRemote('')
+    if (m === 'relocation' && remote === 'remote') setRemote('')
+  }
 
   function buildParams(p: number) {
-    const params = new URLSearchParams({ q: query.trim(), page: String(p) })
-    if (location.trim()) params.set('location', location.trim())
-    if (remote) params.set('remote', remote)
+    const params = new URLSearchParams({ q: queryCheck.value ?? '', page: String(p) })
+    if (locationCheck.value) params.set('location', locationCheck.value)
+    if (remote && mode !== 'remote') params.set('remote', remote)
     if (jobage > 0) params.set('jobage', String(jobage))
-    if (africaOnly) params.set('africaOnly', '1')
+    if (africaOnly && mode === 'remote') params.set('africaOnly', '1')
     params.set('mode', mode)
-    if (sponsorOnly) params.set('sponsorOnly', '1')
+    if (sponsorOnly && mode === 'relocation') params.set('sponsorOnly', '1')
+    if (showRisky) params.set('showRisky', '1')
     return params
   }
 
   async function search() {
-    if (!query.trim() || searching) return
+    if (!canSearch) {
+      if (formError) setError(formError)
+      return
+    }
     setSearching(true)
     setError(null)
     setDetail(null)
@@ -155,6 +225,7 @@ export default function JobSearchPage() {
       setEligibleCount(json.eligibleCount ?? 0)
       setSponsorCount(json.sponsorCount ?? 0)
       setSponsorAsOf(json.sponsorAsOf ?? null)
+      setSuspiciousCount(json.suspiciousCount ?? 0)
       setSearched(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Search failed')
@@ -180,17 +251,48 @@ export default function JobSearchPage() {
   }
 
   async function openDetail(job: JobCard) {
+    // Only LinkedIn has a detail endpoint; board results already carry
+    // their description, so they open straight from what was loaded.
+    if (job.source && job.source !== 'linkedin') {
+      setDetail({ ...job, description: job.description ?? null, seniority: null, employmentType: null, jobFunction: null, industries: null, applyUrl: null })
+      return
+    }
     setDetailLoading(job.id)
     try {
-      const res  = await fetch(`/api/job-search?id=${job.id}`)
+      const res  = await fetch(`/api/job-search?id=${encodeURIComponent(job.id)}`)
       const json = await res.json()
-      if (res.ok) setDetail({ ...json.data, source: job.source })
+      // Keep the card's own fields (risk, eligibility, date) under the detail.
+      if (res.ok) setDetail({ ...job, ...json.data, date: json.data.date ?? job.date, source: job.source })
       else setDetail({ ...job, description: job.description ?? null, seniority: null, employmentType: null, jobFunction: null, industries: null, applyUrl: null })
     } catch {
       setDetail({ ...job, description: job.description ?? null, seniority: null, employmentType: null, jobFunction: null, industries: null, applyUrl: null })
     } finally {
       setDetailLoading(null)
     }
+  }
+
+  // Hands the job to the CV builder, which curates on arrival — the same
+  // request as its own "Generate for Role", without retyping anything.
+  async function tailorCv(job: JobCard | JobDetail) {
+    if (tailoring) return
+    let description = job.description ?? null
+    // LinkedIn cards carry no description; the detail endpoint has it.
+    if ((description?.length ?? 0) < MIN_DESCRIPTION_CHARS && (!job.source || job.source === 'linkedin')) {
+      setTailoring(job.id)
+      try {
+        const res = await fetch(`/api/job-search?id=${encodeURIComponent(job.id)}`)
+        if (res.ok) description = (await res.json()).data?.description ?? description
+      } catch { /* fall through: the CV builder asks for the description */ }
+      finally { setTailoring(null) }
+    }
+    requestCvTailor({
+      role: job.title,
+      company: job.company ?? '',
+      job_description: description ?? '',
+      jobUrl: job.url,
+      source: job.source ? SOURCE_LABELS[job.source] : undefined,
+    })
+    router.push('/cv-builder')
   }
 
   async function addToApplications(job: JobCard | JobDetail) {
@@ -209,7 +311,7 @@ export default function JobSearchPage() {
           notes: `Found via HireKit Job Search (LinkedIn #${job.id})`,
         }),
       })
-      if (res.ok) setAdded(s => new Set(s).add(job.id))
+      if (res.ok) setAdded(s => (s.includes(job.id) ? s : [...s, job.id]))
     } finally {
       setAdding(null)
     }
@@ -256,6 +358,7 @@ export default function JobSearchPage() {
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
+            maxLength={QUERY_MAX}
             onKeyDown={e => e.key === 'Enter' && search()}
             placeholder="Keywords — e.g. React developer, fullstack, Python…"
             aria-label="Search keywords"
@@ -267,30 +370,31 @@ export default function JobSearchPage() {
           <input
             value={location}
             onChange={e => setLocation(e.target.value)}
+            maxLength={LOCATION_MAX}
             onKeyDown={e => e.key === 'Enter' && search()}
-            placeholder="Location (optional)"
+            placeholder={mode === 'nigeria' ? 'City, e.g. Lagos (optional)' : 'Location (optional)'}
             aria-label="Location"
             style={{ flex: 1, padding: '9px 0', background: 'none', border: 'none', outline: 'none', color: 'var(--c-text)', fontSize: 13, fontFamily: 'var(--font-body)' }}
           />
         </div>
-        <select value={remote} onChange={e => setRemote(e.target.value as Remote)} aria-label="Workplace type"
+        {mode !== 'remote' && <select value={remote} onChange={e => setRemote(e.target.value as Remote)} aria-label="Workplace type"
           style={{ padding: '9px 12px', background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', color: remote ? 'var(--c-text)' : 'var(--c-text-muted)', fontSize: 12, outline: 'none', fontFamily: 'var(--font-body)', cursor: 'pointer' }}>
           <option value="">Any workplace</option>
-          <option value="remote">Remote</option>
+          {mode === 'nigeria' && <option value="remote">Remote</option>}
           <option value="hybrid">Hybrid</option>
           <option value="onsite">On-site</option>
-        </select>
+        </select>}
         <select value={jobage} onChange={e => setJobage(Number(e.target.value))} aria-label="Posted within"
           style={{ padding: '9px 12px', background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', color: 'var(--c-text)', fontSize: 12, outline: 'none', fontFamily: 'var(--font-body)', cursor: 'pointer' }}>
           {JOBAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <button onClick={search} disabled={searching || !query.trim()}
+        <button onClick={search} disabled={!canSearch}
           style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px',
             borderRadius: 'var(--r-md)',
-            background: searching || !query.trim() ? 'var(--c-bg-4)' : 'var(--c-coral)',
+            background: !canSearch ? 'var(--c-bg-4)' : 'var(--c-coral)',
             border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
-            cursor: searching || !query.trim() ? 'default' : 'pointer',
+            cursor: !canSearch ? 'default' : 'pointer',
             fontFamily: 'var(--font-body)',
           }}>
           {searching ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={14} />}
@@ -300,13 +404,11 @@ export default function JobSearchPage() {
         {/* Remote vs relocation are different searches: different sources, and
             sponsorship only means anything when moving country. */}
         <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 999, background: 'var(--c-bg-2)', border: '1px solid var(--c-border)' }}>
-          {(['remote', 'relocation'] as SearchMode[]).map(m => (
+          {(['remote', 'nigeria', 'relocation'] as SearchMode[]).map(m => (
             <button
               key={m}
-              onClick={() => setMode(m)}
-              title={m === 'remote'
-                ? 'Remote roles, filtered to those open to Africa'
-                : 'On-site roles abroad, checked against the UK sponsor register'}
+              onClick={() => changeMode(m)}
+              title={MODE_LABELS[m].hint}
               style={{
                 padding: '6px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
                 fontFamily: 'var(--font-body)', fontSize: 12,
@@ -316,7 +418,7 @@ export default function JobSearchPage() {
                 transition: 'all 0.15s',
               }}
             >
-              {m === 'remote' ? 'Remote' : 'Relocation'}
+              {MODE_LABELS[m].label}
             </button>
           ))}
         </div>
@@ -335,7 +437,7 @@ export default function JobSearchPage() {
         {/* Most remote listings name regions that exclude Africa, so this is
             on by default — otherwise the majority of results are unusable. */}
         {mode === 'remote' && <label
-          title="Only roles whose board says a Nigeria/Africa-based applicant may apply"
+          title="Only roles whose listing says someone based in Nigeria may apply (worldwide, EMEA, Africa or Nigeria)"
           style={{
             display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
             fontSize: 12, color: 'var(--c-text-muted)', userSelect: 'none',
@@ -347,8 +449,17 @@ export default function JobSearchPage() {
             onChange={e => setAfricaOnly(e.target.checked)}
             style={{ accentColor: 'var(--c-teal)', width: 14, height: 14, cursor: 'pointer' }}
           />
-          Open to Africa only
+          Open to Nigeria only
         </label>}
+
+        <label
+          title="Postings with scam red flags (fees, Telegram interviews, requests for BVN, phishing links) are hidden unless this is ticked"
+          style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, color: 'var(--c-text-muted)', userSelect: 'none' }}
+        >
+          <input type="checkbox" checked={showRisky} onChange={e => setShowRisky(e.target.checked)}
+            style={{ accentColor: 'var(--c-red)', width: 14, height: 14, cursor: 'pointer' }} />
+          Show possible scams
+        </label>
       </div>
 
       {/* Which boards answered, and how many survived the eligibility filter */}
@@ -375,9 +486,9 @@ export default function JobSearchPage() {
               {SOURCE_LABELS[o.source]} {o.ok ? o.count : 'down'}
             </span>
           ))}
-          {mode === 'remote' ? (
+          {mode === 'nigeria' ? null : mode === 'remote' ? (
             <span>
-              {eligibleCount} open to Africa
+              {eligibleCount} open to Nigeria
               {!africaOnly && ' — tick the filter to show only those'}
             </span>
           ) : (
@@ -386,12 +497,18 @@ export default function JobSearchPage() {
               {sponsorAsOf && ` · register of ${sponsorAsOf}`}
             </span>
           )}
+          {suspiciousCount > 0 && (
+            <span style={{ color: 'var(--c-red)' }}>
+              · {suspiciousCount} possible scam{suspiciousCount === 1 ? '' : 's'} {showRisky ? 'flagged' : 'hidden'}
+            </span>
+          )}
         </div>
       )}
 
-      {error && (
-        <div style={{ margin: '12px 32px 0', fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0 }}>
-          {error}
+      {/* A form problem is shown live, ahead of any earlier server error. */}
+      {(formError || error) && (
+        <div role="alert" style={{ margin: '12px 32px 0', fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0 }}>
+          {formError ?? error}
         </div>
       )}
 
@@ -403,7 +520,7 @@ export default function JobSearchPage() {
           {searching ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--c-text-muted)' }}>
               <Loader2 size={26} style={{ animation: 'spin 1s linear infinite', color: 'var(--c-violet)' }} />
-              <p style={{ fontSize: 13 }}>Searching LinkedIn…</p>
+              <p style={{ fontSize: 13 }}>Searching job boards and company sites…</p>
             </div>
           ) : !searched ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--c-text-dim)', textAlign: 'center' }}>
@@ -411,20 +528,20 @@ export default function JobSearchPage() {
               <div>
                 <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-text-muted)', marginBottom: 4 }}>Search live job listings</p>
                 <p style={{ fontSize: 12, lineHeight: 1.6, maxWidth: 340 }}>
-                  Results come from LinkedIn&apos;s public listings. Jobs matching your saved skills get a match badge — click one for the full description.
+                  Results are pooled from LinkedIn, remote job boards, Nigerian job sites and the hiring pages of companies that hire Nigerians, then checked for scam red flags. Jobs matching your saved skills get a match badge.
                 </p>
               </div>
             </div>
           ) : results.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--c-text-dim)', fontSize: 13 }}>
-              No results — try broader keywords or a different location.
+              No results match every filter — try broader keywords, a longer date range, or a different mode.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: detail ? undefined : 780 }}>
               {results.map(job => {
                 const matches = matchedSkills(job.title, skills)
                 const isActive = detail?.id === job.id
-                const isAdded = added.has(job.id)
+                const isAdded = added.includes(job.id)
                 return (
                   <div key={job.id} onClick={() => openDetail(job)} style={{
                     background: isActive ? 'var(--c-violet-dim)' : 'var(--c-bg-2)',
@@ -440,12 +557,28 @@ export default function JobSearchPage() {
                         {job.title}
                         {detailLoading === job.id && <Loader2 size={12} style={{ animation: 'spin 1s linear infinite', marginLeft: 8, verticalAlign: -1, color: 'var(--c-violet)' }} />}
                       </p>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignSelf: 'flex-start' }}>
+                      <button
+                        aria-label={`Tailor CV for ${job.title}`}
+                        title="Curate a CV for this job in the CV Builder"
+                        onClick={e => { e.stopPropagation(); tailorCv(job) }}
+                        disabled={tailoring !== null}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '5px 12px', borderRadius: 999,
+                          background: 'var(--c-violet-dim)', border: '1px solid rgba(124,92,252,0.2)',
+                          color: 'var(--c-violet)', fontSize: 11, fontWeight: 600,
+                          cursor: tailoring ? 'default' : 'pointer', fontFamily: 'var(--font-body)',
+                        }}>
+                        {tailoring === job.id ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <FileText size={11} />}
+                        Tailor CV
+                      </button>
                       <button
                         aria-label={isAdded ? 'Added to applications' : 'Add to applications'}
                         onClick={e => { e.stopPropagation(); if (!isAdded) addToApplications(job) }}
                         disabled={isAdded || adding === job.id}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, alignSelf: 'flex-start',
+                          display: 'flex', alignItems: 'center', gap: 5,
                           padding: '5px 12px', borderRadius: 999,
                           background: isAdded ? 'rgba(0,168,133,0.1)' : 'var(--c-bg-4)',
                           border: `1px solid ${isAdded ? 'rgba(0,168,133,0.25)' : 'var(--c-border)'}`,
@@ -456,6 +589,7 @@ export default function JobSearchPage() {
                         {adding === job.id ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : isAdded ? <Check size={11} /> : <Plus size={11} />}
                         {isAdded ? 'Added' : 'Track'}
                       </button>
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: 'var(--c-text-muted)' }}>
                       {job.company && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Building2 size={11} />{job.company}</span>}
@@ -471,13 +605,14 @@ export default function JobSearchPage() {
                           {SOURCE_LABELS[job.source]}
                         </span>
                       )}
+                      <RiskBadge risk={job.risk} />
                       {/* The board's own wording is the tooltip, so the user can
                           second-guess the classification rather than trust it blindly. */}
                       {job.eligibility === 'africa-ok' && (
                         <span
                           title={job.eligibilityNote ? `Board says: ${job.eligibilityNote}` : undefined}
                           style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 999, background: 'rgba(0,168,133,0.1)', color: 'var(--c-teal)', fontWeight: 600, fontSize: 10, border: '1px solid rgba(0,168,133,0.22)' }}>
-                          <Check size={10} /> Open to Africa
+                          <Check size={10} /> Open to Nigeria
                         </span>
                       )}
                       {job.ukSponsor && (
@@ -535,6 +670,22 @@ export default function JobSearchPage() {
               {detail.company && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Building2 size={11} />{detail.company}</span>}
               {detail.location && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={11} />{detail.location}</span>}
             </div>
+
+            {/* Scam check: the reasons, not just the verdict */}
+            {detail.risk && (detail.risk.level === 'suspicious' || detail.risk.level === 'caution') && (
+              <div style={{
+                background: RISK_BADGE[detail.risk.level].bg, borderRadius: 'var(--r-md)', padding: '10px 14px', marginBottom: 14,
+                color: RISK_BADGE[detail.risk.level].color, fontSize: 12,
+              }}>
+                <p style={{ fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <ShieldAlert size={12} /> {detail.risk.level === 'suspicious' ? 'This posting shows signs of a scam' : 'Check this posting carefully'}
+                </p>
+                <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+                  {detail.risk.reasons.map(r => <li key={r}>{r}</li>)}
+                </ul>
+                <p style={{ marginTop: 6, opacity: 0.85 }}>Genuine employers never charge applicants or ask for your BVN, bank login or OTP.</p>
+              </div>
+            )}
 
             {/* Criteria chips */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -638,22 +789,35 @@ export default function JobSearchPage() {
             )}
 
             {/* Actions */}
+            <button
+              onClick={() => tailorCv(detail)}
+              disabled={tailoring !== null}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center',
+                padding: '10px 14px', borderRadius: 'var(--r-md)', marginBottom: 8,
+                background: 'var(--c-coral)', border: 'none', color: '#fff',
+                fontSize: 12, fontWeight: 700, cursor: tailoring ? 'default' : 'pointer',
+                fontFamily: 'var(--font-body)', opacity: tailoring && tailoring !== detail.id ? 0.6 : 1,
+              }}>
+              {tailoring === detail.id ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileText size={13} />}
+              {tailoring === detail.id ? 'Fetching the job description…' : 'Tailor my CV to this job'}
+            </button>
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               <button
-                onClick={() => !added.has(detail.id) && addToApplications(detail)}
-                disabled={added.has(detail.id) || adding === detail.id}
+                onClick={() => !added.includes(detail.id) && addToApplications(detail)}
+                disabled={added.includes(detail.id) || adding === detail.id}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center',
                   padding: '9px 14px', borderRadius: 'var(--r-md)',
-                  background: added.has(detail.id) ? 'rgba(0,168,133,0.1)' : 'var(--c-violet)',
-                  border: added.has(detail.id) ? '1px solid rgba(0,168,133,0.25)' : 'none',
-                  color: added.has(detail.id) ? 'var(--c-teal)' : '#fff',
+                  background: added.includes(detail.id) ? 'rgba(0,168,133,0.1)' : 'var(--c-violet)',
+                  border: added.includes(detail.id) ? '1px solid rgba(0,168,133,0.25)' : 'none',
+                  color: added.includes(detail.id) ? 'var(--c-teal)' : '#fff',
                   fontSize: 12, fontWeight: 600,
-                  cursor: added.has(detail.id) ? 'default' : 'pointer',
+                  cursor: added.includes(detail.id) ? 'default' : 'pointer',
                   fontFamily: 'var(--font-body)',
                 }}>
-                {adding === detail.id ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : added.has(detail.id) ? <Check size={12} /> : <Plus size={12} />}
-                {added.has(detail.id) ? 'On your board' : 'Track application'}
+                {adding === detail.id ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : added.includes(detail.id) ? <Check size={12} /> : <Plus size={12} />}
+                {added.includes(detail.id) ? 'On your board' : 'Track application'}
               </button>
               <a href={detail.url} target="_blank" rel="noopener noreferrer"
                 style={{

@@ -5,11 +5,13 @@ import useSWR, { mutate as globalMutate } from 'swr'
 import {
   Loader2, Zap, Copy, Check, FileText, Eye, Edit3,
   ArrowRight, Upload, Trash2, Plus, Clock, X, Sparkles, Download, ImageDown,
+  ArrowLeft, ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
 import { fetcher } from '@/lib/fetcher'
 import { printElementAsPdf } from '@/lib/print-pdf'
 import type { CvVersion, PersonalInfo } from '@/lib/supabase'
+import { takeCvTailorRequest, MIN_DESCRIPTION_CHARS, type CvTailorRequest } from '@/lib/cv-tailor-handoff'
 
 // Scans canvas pixel rows near each page boundary to find a mostly-white
 // row (a gap between sections) so we never cut through text mid-glyph.
@@ -297,6 +299,13 @@ export default function CVBuilderPage() {
   const [genForm, setGenForm]     = useState({ role: '', company: '', job_description: '' })
   const [sourcesUsed, setSourcesUsed] = useState<number | null>(null)
 
+  // Set when the CV was tailored to a job picked in Job Search; drives the
+  // "Tailored for…" bar and its links back to the posting and the search.
+  const [tailoredFor, setTailoredFor] = useState<CvTailorRequest | null>(null)
+  // A job handed over without a usable description waits here while the
+  // user pastes one into the pre-filled form.
+  const pendingTailor = useRef<CvTailorRequest | null>(null)
+
   // ── Load current CV + version list ─────────────────────────
   // Cached under these two /api/* keys — shared with the personal-info page,
   // so a saved profile shows up here without an extra fetch, and revisiting
@@ -312,6 +321,40 @@ export default function CVBuilderPage() {
     setPageLoading(false)
     seeded.current = true
   }, [infoData, versionsData])
+
+  // Cancelling the pre-filled form drops the handed-over job, so a later
+  // manual Generate is not labelled with it.
+  function closeGenModal() {
+    setGenModal(false)
+    if (pendingTailor.current) {
+      pendingTailor.current = null
+      setGenForm({ role: '', company: '', job_description: '' })
+    }
+  }
+
+  // ── Tailor request from Job Search ─────────────────────────
+  // Runs once the CV and versions have loaded: the seeding effect above sets
+  // the editor content, and must not land on top of the curated CV.
+  const tookTailor = useRef(false)
+  useEffect(() => {
+    if (pageLoading || tookTailor.current) return
+    tookTailor.current = true
+    const req = takeCvTailorRequest()
+    if (!req) return
+    if (req.job_description.trim().length >= MIN_DESCRIPTION_CHARS) {
+      setTailoredFor(req)
+      setTab('preview')
+      generate({ role: req.role, company: req.company, job_description: req.job_description })
+    } else {
+      // No usable description came with the job (some listings only link
+      // out). Open the form pre-filled so only the description is missing.
+      pendingTailor.current = req
+      setGenForm({ role: req.role, company: req.company, job_description: req.job_description })
+      setGenModal(true)
+    }
+    // generate is recreated each render; this must run once per arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageLoading])
 
   // ── Upload drop handler ────────────────────────────────────
   const onDrop = useCallback(async (files: File[]) => {
@@ -400,16 +443,24 @@ export default function CVBuilderPage() {
   }
 
   // ── Generate for role (multi-CV curation) ─────────────────
-  async function generate() {
-    if (!genForm.role || !genForm.job_description) return
+  async function generate(form: { role: string; company: string; job_description: string } = genForm) {
+    if (!form.role || !form.job_description) return
     setGenerating(true)
     setError(null)
     setGenModal(false)
+    if (pendingTailor.current) {
+      // The job from Job Search, now with the pasted description.
+      setTailoredFor({ ...pendingTailor.current, ...form })
+      pendingTailor.current = null
+    } else if (form === genForm) {
+      // A manual run from the modal is not tied to a searched job.
+      setTailoredFor(null)
+    }
     try {
       const res = await fetch('/api/ai/cv-builder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(genForm),
+        body: JSON.stringify({ role: form.role, company: form.company, job_description: form.job_description }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Generation failed')
@@ -695,8 +746,64 @@ export default function CVBuilderPage() {
           </div>
         )}
 
+        {/* Which job this CV was tailored to, with the way back */}
+        {tailoredFor && (
+          <div className="fade-up" style={{
+            padding: '9px 20px', borderBottom: '1px solid var(--c-border)', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            background: 'var(--c-violet-dim)', fontSize: 12,
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--c-violet)', fontWeight: 600, minWidth: 0 }}>
+              {generating ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} /> : <Sparkles size={13} style={{ flexShrink: 0 }} />}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {generating ? 'Tailoring your CV for ' : 'Tailored for '}
+                {tailoredFor.role}{tailoredFor.company ? ` · ${tailoredFor.company}` : ''}
+              </span>
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+              {tailoredFor.jobUrl && (
+                <a href={tailoredFor.jobUrl} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--c-text-muted)', fontWeight: 600, textDecoration: 'none' }}>
+                  <ExternalLink size={11} /> View posting{tailoredFor.source ? ` on ${tailoredFor.source}` : ''}
+                </a>
+              )}
+              <Link href="/job-search" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--c-text-muted)', fontWeight: 600, textDecoration: 'none' }}>
+                <ArrowLeft size={11} /> Back to job search
+              </Link>
+              {!generating && (
+                <button type="button" aria-label="Dismiss" onClick={() => setTailoredFor(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--c-text-dim)', cursor: 'pointer', padding: 2, display: 'flex' }}>
+                  <X size={12} />
+                </button>
+              )}
+            </span>
+          </div>
+        )}
+
         {/* Edit / Preview panel */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+          {/* While curating, the old CV stays visible but dimmed under a
+              progress card, so the swap to the new one reads as a result. */}
+          {generating && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'color-mix(in srgb, var(--c-bg) 72%, transparent)', backdropFilter: 'blur(2px)',
+            }}>
+              <div className="fade-up" style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center',
+                background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-xl)',
+                padding: '24px 30px', maxWidth: 360, boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+              }}>
+                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--c-violet)' }} />
+                <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text)' }}>Curating your CV</p>
+                <p style={{ fontSize: 12, color: 'var(--c-text-muted)', lineHeight: 1.6 }}>
+                  Reading all your CVs and profile, then picking what matters for
+                  {tailoredFor ? ` ${tailoredFor.role}${tailoredFor.company ? ` at ${tailoredFor.company}` : ''}` : ' this role'}.
+                  This usually takes 10–30 seconds.
+                </p>
+              </div>
+            </div>
+          )}
           {tab === 'edit' ? (
             <textarea
               aria-label="CV markdown editor"
@@ -732,7 +839,7 @@ export default function CVBuilderPage() {
       {/* ── Generate for Role Modal ── */}
       {genModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setGenModal(false)}>
+          onClick={closeGenModal}>
           <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: 28, width: 520, maxHeight: '88vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
 
@@ -743,7 +850,7 @@ export default function CVBuilderPage() {
                   The AI reads ALL {versions.length > 0 ? `${versions.length} uploaded CV${versions.length !== 1 ? 's' : ''}` : 'your profile data'} and curates the most relevant one for this specific role — ATS-optimised with the job's exact keywords.
                 </p>
               </div>
-              <button aria-label="Close" onClick={() => setGenModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-muted)', padding: 4, flexShrink: 0 }}><X size={18} /></button>
+              <button aria-label="Close" onClick={closeGenModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-muted)', padding: 4, flexShrink: 0 }}><X size={18} /></button>
             </div>
 
             {versions.length === 0 && (
@@ -769,8 +876,8 @@ export default function CVBuilderPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, marginTop: 22, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setGenModal(false)} style={{ padding: '9px 18px', borderRadius: 'var(--r-md)', background: 'transparent', border: '1px solid var(--c-border-md)', color: 'var(--c-text-muted)', fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>Cancel</button>
-              <button type="button" onClick={generate} disabled={!genForm.role || !genForm.job_description} style={{
+              <button type="button" onClick={closeGenModal} style={{ padding: '9px 18px', borderRadius: 'var(--r-md)', background: 'transparent', border: '1px solid var(--c-border-md)', color: 'var(--c-text-muted)', fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>Cancel</button>
+              <button type="button" onClick={() => generate()} disabled={!genForm.role || !genForm.job_description} style={{
                 display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 'var(--r-md)',
                 background: genForm.role && genForm.job_description ? 'var(--c-violet)' : 'var(--c-bg-4)',
                 border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,

@@ -1,8 +1,12 @@
-// Remote job boards with public JSON APIs. Remotive and Jobicy publish who may
-// apply (candidate_required_location / jobGeo), which is what makes the
-// eligibility filter possible at all.
+// Job sources with public feeds. Remotive, Jobicy, Himalayas and We Work
+// Remotely publish who may apply (candidate_required_location / jobGeo /
+// locationRestrictions / region), which is what makes the eligibility filter
+// possible at all. HotNigerianJobs and the company boards add jobs based in
+// Nigeria itself.
 //
 // Server-side only: called from API routes, never a Client Component.
+
+import { COMPANY_BOARDS, type CompanyBoard } from './company-boards'
 
 // Defined here, not in the optional LinkedIn adapter, so nothing depends on a
 // module that may be absent.
@@ -27,20 +31,33 @@ export interface JobDetail extends JobCard {
   applyUrl: string | null
 }
 
+export type Workplace = 'remote' | 'hybrid' | 'onsite'
+
 export interface JobSearchOptions {
   query?: string
   location?: string
   jobage?: number
-  remote?: 'remote' | 'hybrid' | 'onsite'
+  remote?: Workplace
   page?: number
 }
 
-export type JobSourceId = 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
+export type JobSourceId =
+  | 'linkedin' | 'remotive' | 'jobicy' | 'remoteok' | 'arbeitnow'
+  | 'himalayas' | 'workingnomads' | 'weworkremotely' | 'hotnigerianjobs' | 'companies'
+
+export const ALL_SOURCES: JobSourceId[] = [
+  'linkedin', 'remotive', 'jobicy', 'remoteok', 'arbeitnow',
+  'himalayas', 'workingnomads', 'weworkremotely', 'hotnigerianjobs', 'companies',
+]
+
+/** remote: work from Nigeria for anyone. nigeria: jobs based in Nigeria.
+ *  relocation: on-site roles abroad, where sponsorship matters. */
+export type SearchMode = 'remote' | 'nigeria' | 'relocation'
 
 /** What a posting says about sponsoring a work visa, if anything. */
 export type VisaSignal = 'offers' | 'denies' | 'unstated'
 
-/** Whether someone based in Nigeria / Africa may apply. */
+/** Whether someone based in Nigeria may apply. */
 export type Eligibility = 'africa-ok' | 'restricted' | 'unknown'
 
 export interface SourcedJob extends JobCard {
@@ -48,6 +65,7 @@ export interface SourcedJob extends JobCard {
   eligibility: Eligibility
   /** The board's own wording, shown so the user can judge for themselves. */
   eligibilityNote: string | null
+  workplace: Workplace
   remote: boolean
   /** What the posting says about sponsorship, where a description exists. */
   visa?: VisaSignal
@@ -63,22 +81,30 @@ export interface SourcedJob extends JobCard {
 }
 
 export const SOURCE_LABELS: Record<JobSourceId, string> = {
-  linkedin:  'LinkedIn',
-  remotive:  'Remotive',
-  jobicy:    'Jobicy',
-  remoteok:  'RemoteOK',
-  arbeitnow: 'Arbeitnow',
+  linkedin:        'LinkedIn',
+  remotive:        'Remotive',
+  jobicy:          'Jobicy',
+  remoteok:        'RemoteOK',
+  arbeitnow:       'Arbeitnow',
+  himalayas:       'Himalayas',
+  workingnomads:   'Working Nomads',
+  weworkremotely:  'We Work Remotely',
+  hotnigerianjobs: 'HotNigerianJobs',
+  companies:       'Company boards',
 }
 
-/** Remote boards carry remote work; Arbeitnow carries on-site European roles,
- *  which is where relocation and sponsorship actually apply. */
-export const SOURCES_BY_MODE: Record<'remote' | 'relocation', JobSourceId[]> = {
-  remote:     ['linkedin', 'remotive', 'jobicy', 'remoteok'],
-  relocation: ['linkedin', 'arbeitnow'],
+/** Remote boards carry remote work; HotNigerianJobs carries jobs in Nigeria;
+ *  Arbeitnow carries on-site European roles, which is where relocation and
+ *  sponsorship actually apply. The company boards span all three, and
+ *  applyFilters keeps the part that fits the mode. */
+export const SOURCES_BY_MODE: Record<SearchMode, JobSourceId[]> = {
+  remote:     ['linkedin', 'himalayas', 'remotive', 'jobicy', 'remoteok', 'workingnomads', 'weworkremotely', 'companies'],
+  nigeria:    ['linkedin', 'hotnigerianjobs', 'companies'],
+  relocation: ['linkedin', 'arbeitnow', 'companies'],
 }
 
-const VISA_OFFERS = /(visa sponsorship|sponsor(ship)? (is )?(available|provided|offered)|we (can )?sponsor|will sponsor|relocation (support|assistance|package|bonus)|work permit (support|provided)|tier 2|skilled worker visa)/i
-const VISA_DENIES = /(no (visa )?sponsorship|cannot sponsor|unable to sponsor|not (able|in a position) to sponsor|without (visa )?sponsorship|must (already )?(be|have) (authori[sz]ed|eligible) to work|no relocation)/i
+const VISA_OFFERS = /(visa sponsorship|sponsor(ship)? (is )?(available|provided|offered)|we (can )?sponsor|will sponsor|relocation (support|assistance|package|bonus)|work permit (support|provided)|tier 2|skilled worker visa)/i
+const VISA_DENIES = /(no (visa )?sponsorship|cannot sponsor|unable to sponsor|not (able|in a position) to sponsor|without (visa )?sponsorship|must (already )?(be|have) (authori[sz]ed|eligible) to work|no relocation)/i
 
 /** Denial wins over an offer: a post saying both usually means "we sponsor
  *  some roles, not this one". */
@@ -90,26 +116,86 @@ export function detectVisaSignal(text?: string | null): VisaSignal {
 }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 HireKit/1.0'
-const HEADERS = { 'User-Agent': UA, Accept: 'application/json' }
+
+// ── Eligibility ───────────────────────────────────────────────────
+
+/** Nigeria and its tech cities. Locations name a city more often than the
+ *  country ("Lagos", "Ikoyi"), so the country alone would miss most of them. */
+const NIGERIA = /\b(nigeria|nigerian|lagos|abuja|ibadan|port harcourt|kano|kaduna|enugu|benin city|ikeja|ikoyi|lekki|victoria island|yaba|owerri|uyo|calabar|ilorin|abeokuta|onitsha|akure|warri)\b/i
+
+/** Sub-regions of Africa that do not include Nigeria. Stripped before the
+ *  region test, or "South Africa" would read as open to Africa. */
+const OTHER_AFRICAN_REGIONS = /\b(south|southern|north|northern|east|eastern|central)\s+africa\b/gi
 
 // EMEA expands to Europe, Middle East and Africa, so it counts as open.
-const OPEN_TO_AFRICA = /\b(africa|african|nigeria|nigerian|kenya|ghana|egypt|emea)\b/i
-const OPEN_TO_ANYONE = /\b(worldwide|anywhere|global|international|any location|remote, world)\b/i
+const OPEN_REGION = /\b(africa|african|emea)\b/i
+const WORLDWIDE = /\b(worldwide|world ?wide|anywhere|global|globally|international|internationally|any location|all countries|all locations)\b/i
 
-/** Whether a board's location string includes Africa. Conservative: named
- *  regions without Africa count as restricted. */
+/** "Anywhere in India" names one country; only the world or a region that
+ *  contains Nigeria makes "anywhere" mean open. */
+const ANYWHERE_IN = /\banywhere in (?!(?:the )?(?:world|africa|emea)\b)(?:the )?[a-z]+/gi
+
+/** "Worldwide except Africa", "not open to Nigeria". */
+const EXCLUDES = /\b(except|excluding|excludes|not (?:open )?(?:to|in|from)|outside(?: of)?)\b[^.;]*\b(africa|nigeria|emea)\b/i
+
+/** Says nothing about who may apply. */
+const NO_INFO = /^(remote|fully remote|100% remote|remote[- ]first|work from home|wfh|n\/a|tbd|various|multiple locations|flexible)$/i
+
+/** Time-zone-only constraints ("CET +/- 3 hours") limit hours, not
+ *  citizenship. Nigeria is UTC+1, so they are often workable. */
+const TIMEZONE_ONLY = /^(?:[^a-z]*|.*\b(?:time ?zones?|utc|gmt|cet|cest|wat|hours?)\b.*)$/i
+const NAMES_PLACE = /\b(us|usa|u\.s\.|united states|canada|uk|united kingdom|europe|eu|latam|latin america|apac|asia|india|australia|americas|north america|germany|brazil|mexico)\b/i
+
+/** Whether a location string lets a Nigeria-based applicant apply.
+ *  Conservative: a list of named places without Nigeria counts as
+ *  restricted, including other African countries — "Kenya" alone does not
+ *  admit someone in Lagos. */
 export function classifyEligibility(raw?: string | null): { level: Eligibility; note: string | null } {
-  const s = (raw ?? '').trim()
+  const s = (raw ?? '').replace(/\s+/g, ' ').trim()
   if (!s) return { level: 'unknown', note: null }
-  if (OPEN_TO_AFRICA.test(s)) return { level: 'africa-ok', note: s }
-  if (OPEN_TO_ANYONE.test(s)) return { level: 'africa-ok', note: s }
+  if (EXCLUDES.test(s)) return { level: 'restricted', note: s }
+  if (NIGERIA.test(s)) return { level: 'africa-ok', note: s }
+
+  const scrubbed = s.replace(OTHER_AFRICAN_REGIONS, ' ').replace(ANYWHERE_IN, ' ')
+  if (OPEN_REGION.test(scrubbed)) return { level: 'africa-ok', note: s }
+  if (WORLDWIDE.test(scrubbed)) return { level: 'africa-ok', note: s }
+
+  if (NO_INFO.test(s)) return { level: 'unknown', note: s }
+  if (TIMEZONE_ONLY.test(s) && !NAMES_PLACE.test(s)) return { level: 'unknown', note: s }
   return { level: 'restricted', note: s }
 }
 
+export function isInNigeria(location?: string | null): boolean {
+  return !!location && NIGERIA.test(location)
+}
+
+/** Reads the workplace from whatever text the board gives. Hybrid is checked
+ *  first: "Hybrid (remote 3 days)" is hybrid, not remote. */
+export function inferWorkplace(...texts: (string | null | undefined)[]): Workplace {
+  const s = texts.filter(Boolean).join(' ')
+  if (/\bhybrid\b/i.test(s)) return 'hybrid'
+  if (/\b(remote|work from home|wfh|home[- ]based|anywhere|distributed)\b/i.test(s)) return 'remote'
+  return 'onsite'
+}
+
+// ── Fetching ──────────────────────────────────────────────────────
+
 function isoDate(input?: string | number | null): string | null {
   if (input === null || input === undefined || input === '') return null
-  const d = typeof input === 'number' ? new Date(input * 1000) : new Date(input)
+  const d = typeof input === 'number'
+    // Seconds or milliseconds: anything past 1e12 is already milliseconds.
+    ? new Date(input > 1e12 ? input : input * 1000)
+    : new Date(input)
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&amp;/g, '&')
 }
 
 function stripHtml(s?: string | null): string | null {
@@ -127,17 +213,76 @@ function summarise(raw?: string | null): string | null {
   return text.length > DESCRIPTION_LIMIT ? `${text.slice(0, DESCRIPTION_LIMIT)}…` : text
 }
 
+// Whole-board feeds (RemoteOK, Arbeitnow, the RSS feeds and every company
+// board) return the same payload whatever was searched, and Workable
+// rate-limits bursts. Caching them for a while makes repeat searches cheap
+// and keeps the app from hammering anyone's servers.
+const CACHE_MS = 15 * 60 * 1000
+const cache = new Map<string, { at: number; body: Promise<string> }>()
+
+async function fetchText(url: string, accept: string, ms = 9000, init?: RequestInit): Promise<string> {
+  const key = `${init?.method ?? 'GET'} ${url} ${init?.body ?? ''}`
+  const hit = cache.get(key)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.body
+
+  const body = (async () => {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), ms)
+    try {
+      const res = await fetch(url, {
+        ...init,
+        headers: { 'User-Agent': UA, Accept: accept, ...(init?.headers ?? {}) },
+        signal: ctrl.signal,
+        cache: 'no-store',
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return await res.text()
+    } finally {
+      clearTimeout(timer)
+    }
+  })()
+  cache.set(key, { at: Date.now(), body })
+  // A failure must not be cached, or one timeout blanks the source for 15 min.
+  body.catch(() => cache.delete(key))
+  return body
+}
+
 /** Per-source timeout so one slow board cannot stall the search. */
-async function getJson(url: string, ms = 9000): Promise<unknown> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), ms)
+async function getJson(url: string, ms?: number, init?: RequestInit): Promise<unknown> {
+  const text = await fetchText(url, 'application/json', ms, init)
   try {
-    const res = await fetch(url, { headers: HEADERS, signal: ctrl.signal, cache: 'no-store' })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return await res.json()
-  } finally {
-    clearTimeout(timer)
+    return JSON.parse(text)
+  } catch {
+    // Rate limiters and bot checks answer 200 with an HTML page.
+    throw new Error('unexpected non-JSON response')
   }
+}
+
+interface RssItem { title: string; link: string; description: string; pubDate: string; region: string }
+
+function rssField(item: string, tag: string): string {
+  const m = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i'))
+  return m ? decodeEntities(m[1]).trim() : ''
+}
+
+async function getRss(url: string): Promise<RssItem[]> {
+  const xml = await fetchText(url, 'application/rss+xml, application/xml, text/xml')
+  return xml.split(/<item[\s>]/i).slice(1).map(item => ({
+    title: rssField(item, 'title'),
+    link: rssField(item, 'link') || rssField(item, 'guid'),
+    description: rssField(item, 'description'),
+    pubDate: rssField(item, 'pubDate'),
+    region: rssField(item, 'region'),
+  }))
+}
+
+/** Pre-filter for whole-board feeds, before filterRelevant decides properly:
+ *  any meaningful term, so a 600-item feed is not carried through whole. */
+function looselyMatches(query: string, ...texts: (string | null | undefined)[]): boolean {
+  const terms = meaningfulTerms(query)
+  if (!terms.length) return true
+  const hay = canonicalise(texts.filter(Boolean).join(' '))
+  return terms.some(t => hay.includes(t))
 }
 
 // ── Remotive ──────────────────────────────────────────────────────
@@ -167,6 +312,7 @@ async function fromRemotive(query: string): Promise<SourcedJob[]> {
       keywords: j.tags ?? [],
       eligibility: el.level,
       eligibilityNote: el.note,
+      workplace: 'remote' as const,
       remote: true,
     }
   })
@@ -187,7 +333,7 @@ async function fromJobicy(query: string): Promise<SourcedJob[]> {
     const el = classifyEligibility(j.jobGeo)
     return {
       id: `jobicy:${j.id}`,
-      title: j.jobTitle,
+      title: decodeEntities(j.jobTitle),
       company: j.companyName ?? null,
       companyUrl: null,
       location: j.jobGeo ?? 'Remote',
@@ -197,6 +343,7 @@ async function fromJobicy(query: string): Promise<SourcedJob[]> {
       description: summarise(j.jobExcerpt),
       eligibility: el.level,
       eligibilityNote: el.note,
+      workplace: 'remote' as const,
       remote: true,
     }
   })
@@ -212,14 +359,9 @@ interface RemoteOkJob {
 async function fromRemoteOk(query: string): Promise<SourcedJob[]> {
   // No search param: returns the whole board. Element 0 is a legal notice.
   const all = await getJson('https://remoteok.com/api') as RemoteOkJob[]
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
 
   return (Array.isArray(all) ? all.slice(1) : [])
-    .filter(j => {
-      // Any term, not all; filterRelevant tightens this afterwards.
-      const hay = `${j.position ?? ''} ${j.company ?? ''} ${(j.tags ?? []).join(' ')}`.toLowerCase()
-      return terms.some(t => hay.includes(t))
-    })
+    .filter(j => looselyMatches(query, j.position, j.company, (j.tags ?? []).join(' ')))
     .slice(0, 50)
     .map(j => {
       const el = classifyEligibility(j.location)
@@ -232,15 +374,162 @@ async function fromRemoteOk(query: string): Promise<SourcedJob[]> {
         date: isoDate(j.date),
         url: j.url ?? j.apply_url ?? `https://remoteok.com/remote-jobs/${j.slug ?? j.id}`,
         source: 'remoteok' as const,
-      description: summarise(j.description),
+        description: summarise(j.description),
         keywords: j.tags ?? [],
         eligibility: el.level,
         eligibilityNote: el.note,
+        workplace: 'remote' as const,
         remote: true,
       }
     })
 }
 
+// ── Himalayas ─────────────────────────────────────────────────────
+// The best-structured remote board: every posting lists the countries it
+// accepts, and country=NG returns exactly the worldwide ones plus those that
+// name Nigeria, so eligibility is a fact rather than a parse.
+interface HimalayasJob {
+  title: string; companyName: string; excerpt?: string; description?: string
+  employmentType?: string; seniority?: string[]; categories?: string[]
+  locationRestrictions?: string[]; pubDate?: number; applicationLink?: string; guid: string
+}
+
+async function fromHimalayas(query: string): Promise<SourcedJob[]> {
+  const data = await getJson(
+    `https://himalayas.app/jobs/api/search?q=${encodeURIComponent(query)}&country=NG&limit=50`,
+  ) as { jobs?: HimalayasJob[] }
+
+  return (data.jobs ?? []).map(j => {
+    const where = j.locationRestrictions ?? []
+    // An empty list means the employer accepts any country.
+    const open = where.length === 0 || where.includes('Nigeria')
+    const note = where.length === 0
+      ? 'Worldwide'
+      : where.length > 6 ? `${where.slice(0, 6).join(', ')} +${where.length - 6} more` : where.join(', ')
+    return {
+      id: `himalayas:${j.guid}`,
+      title: j.title,
+      company: j.companyName ?? null,
+      companyUrl: null,
+      location: note,
+      date: isoDate(j.pubDate ?? null),
+      url: j.applicationLink ?? j.guid,
+      source: 'himalayas' as const,
+      description: summarise(j.description ?? j.excerpt),
+      keywords: (j.categories ?? []).map(c => c.replace(/-/g, ' ')),
+      eligibility: open ? 'africa-ok' as const : 'restricted' as const,
+      eligibilityNote: note,
+      workplace: 'remote' as const,
+      remote: true,
+    }
+  })
+}
+
+// ── Working Nomads ────────────────────────────────────────────────
+interface WorkingNomadsJob {
+  url: string; title: string; description?: string; company_name?: string
+  category_name?: string; tags?: string; location?: string; pub_date?: string
+}
+
+async function fromWorkingNomads(query: string): Promise<SourcedJob[]> {
+  // Whole feed, no search parameter.
+  const all = await getJson('https://www.workingnomads.com/api/exposed_jobs/') as WorkingNomadsJob[]
+
+  return (Array.isArray(all) ? all : [])
+    .filter(j => looselyMatches(query, j.title, j.tags, j.category_name))
+    .map(j => {
+      const el = classifyEligibility(j.location)
+      return {
+        id: `workingnomads:${j.url}`,
+        title: j.title,
+        company: j.company_name ?? null,
+        companyUrl: null,
+        location: j.location ?? 'Remote',
+        date: isoDate(j.pub_date),
+        url: j.url,
+        source: 'workingnomads' as const,
+        description: summarise(j.description),
+        keywords: (j.tags ?? '').split(',').map(t => t.trim()).filter(Boolean),
+        eligibility: el.level,
+        eligibilityNote: el.note,
+        workplace: 'remote' as const,
+        remote: true,
+      }
+    })
+}
+
+// ── We Work Remotely ──────────────────────────────────────────────
+// RSS per category. Titles read "Company: Role"; <region> is who may apply.
+const WWR_FEEDS = [
+  'remote-full-stack-programming-jobs',
+  'remote-back-end-programming-jobs',
+  'remote-front-end-programming-jobs',
+  'remote-devops-sysadmin-jobs',
+  'remote-programming-jobs',
+]
+
+async function fromWeWorkRemotely(query: string): Promise<SourcedJob[]> {
+  const settled = await Promise.allSettled(
+    WWR_FEEDS.map(f => getRss(`https://weworkremotely.com/categories/${f}.rss`)),
+  )
+  const items = settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []))
+  if (!items.length && settled.every(r => r.status === 'rejected')) {
+    throw (settled[0] as PromiseRejectedResult).reason
+  }
+
+  return items
+    .filter(i => looselyMatches(query, i.title))
+    .map(i => {
+      const colon = i.title.indexOf(': ')
+      const company = colon > 0 ? i.title.slice(0, colon) : null
+      const title = colon > 0 ? i.title.slice(colon + 2) : i.title
+      const el = classifyEligibility(i.region)
+      return {
+        id: `weworkremotely:${i.link}`,
+        title,
+        company,
+        companyUrl: null,
+        location: i.region || 'Remote',
+        date: isoDate(i.pubDate),
+        url: i.link,
+        source: 'weworkremotely' as const,
+        description: summarise(i.description),
+        eligibility: el.level,
+        eligibilityNote: el.note,
+        workplace: 'remote' as const,
+        remote: true,
+      }
+    })
+}
+
+// ── HotNigerianJobs ───────────────────────────────────────────────
+// Nigeria's largest general job board, via its public RSS feed. Every job is
+// in Nigeria; titles read "Role at Company".
+async function fromHotNigerianJobs(query: string): Promise<SourcedJob[]> {
+  const items = await getRss('https://www.hotnigerianjobs.com/feed/rss.xml')
+
+  return items
+    .filter(i => looselyMatches(query, i.title))
+    .map(i => {
+      const m = i.title.match(/^(.*) at (.+)$/)
+      const workplace = inferWorkplace(i.title)
+      return {
+        id: `hotnigerianjobs:${i.link}`,
+        title: m ? m[1].trim() : i.title,
+        company: m ? m[2].trim() : null,
+        companyUrl: null,
+        location: 'Nigeria',
+        date: isoDate(i.pubDate),
+        url: i.link,
+        source: 'hotnigerianjobs' as const,
+        description: summarise(i.description),
+        eligibility: 'africa-ok' as const,
+        eligibilityNote: 'Based in Nigeria',
+        workplace,
+        remote: workplace === 'remote',
+      }
+    })
+}
 
 // ── Arbeitnow ─────────────────────────────────────────────────────
 // Mostly on-site European roles, which is why it carries the relocation mode:
@@ -254,18 +543,15 @@ interface ArbeitnowJob {
 
 async function fromArbeitnow(query: string): Promise<SourcedJob[]> {
   const data = await getJson('https://www.arbeitnow.com/api/job-board-api') as { data?: ArbeitnowJob[] }
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
 
   return (data.data ?? [])
-    .filter(j => {
-      const hay = `${j.title ?? ''} ${j.company_name ?? ''} ${(j.tags ?? []).join(' ')}`.toLowerCase()
-      return terms.length === 0 || terms.some(t => hay.includes(t))
-    })
+    .filter(j => looselyMatches(query, j.title, j.company_name, (j.tags ?? []).join(' ')))
     .slice(0, 60)
     .map(j => {
       // Arbeitnow publishes where the job is, not who may apply, so
       // eligibility stays unknown and the visa signal does the work here.
       const el = classifyEligibility(j.location)
+      const workplace: Workplace = j.remote ? 'remote' : inferWorkplace(j.title) === 'hybrid' ? 'hybrid' : 'onsite'
       return {
         id: `arbeitnow:${j.slug}`,
         title: j.title,
@@ -275,14 +561,145 @@ async function fromArbeitnow(query: string): Promise<SourcedJob[]> {
         date: isoDate(j.created_at ?? null),
         url: j.url,
         source: 'arbeitnow' as const,
-      description: summarise(j.description),
+        description: summarise(j.description),
         keywords: j.tags ?? [],
         eligibility: el.level === 'africa-ok' ? 'africa-ok' : 'unknown' as Eligibility,
         eligibilityNote: j.location ?? null,
-        remote: !!j.remote,
+        workplace,
+        remote: workplace === 'remote',
         visa: detectVisaSignal(`${j.title ?? ''} ${j.description ?? ''}`),
       }
     })
+}
+
+// ── Company boards ────────────────────────────────────────────────
+// One normalised shape per ATS, then the same treatment for all of them.
+interface RawPosting {
+  id: string; title: string; location: string; date: string | null
+  url: string; workplace: Workplace; description?: string | null
+}
+
+const COUNTRY_CODES: Record<string, string> = { ng: 'Nigeria', gb: 'United Kingdom', us: 'United States', ke: 'Kenya', gh: 'Ghana', za: 'South Africa' }
+const country = (c?: string | null) => (c ? COUNTRY_CODES[c.toLowerCase()] ?? c : '')
+const joinLoc = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(', ')
+
+async function readBoard(b: CompanyBoard): Promise<RawPosting[]> {
+  switch (b.ats) {
+    case 'greenhouse': {
+      const d = await getJson(`https://boards-api.greenhouse.io/v1/boards/${b.slug}/jobs`) as {
+        jobs?: { id: number; title: string; absolute_url: string; location?: { name?: string }; first_published?: string; updated_at?: string }[]
+      }
+      return (d.jobs ?? []).map(j => {
+        const location = j.location?.name ?? ''
+        return {
+          id: String(j.id), title: j.title, location, url: j.absolute_url,
+          date: isoDate(j.first_published ?? j.updated_at), workplace: inferWorkplace(location),
+        }
+      })
+    }
+    case 'lever': {
+      const d = await getJson(`https://api.lever.co/v0/postings/${b.slug}?mode=json`) as {
+        id: string; text: string; hostedUrl: string; createdAt?: number; workplaceType?: string
+        categories?: { location?: string }; descriptionPlain?: string
+      }[]
+      return (Array.isArray(d) ? d : []).map(j => {
+        const location = j.categories?.location ?? ''
+        const wt = j.workplaceType
+        return {
+          id: j.id, title: j.text, location, url: j.hostedUrl, date: isoDate(j.createdAt ?? null),
+          workplace: wt === 'remote' ? 'remote' : wt === 'hybrid' ? 'hybrid' : wt === 'on-site' ? 'onsite' : inferWorkplace(location),
+          description: j.descriptionPlain,
+        }
+      })
+    }
+    case 'ashby': {
+      const d = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${b.slug}`) as {
+        jobs?: { id: string; title: string; location?: string; isListed?: boolean; isRemote?: boolean
+          workplaceType?: string; publishedAt?: string; jobUrl: string; descriptionPlain?: string
+          secondaryLocations?: { location?: string }[] }[]
+      }
+      return (d.jobs ?? []).filter(j => j.isListed !== false).map(j => {
+        const location = joinLoc(j.location, ...(j.secondaryLocations ?? []).map(s => s.location))
+        const wt = j.workplaceType?.toLowerCase()
+        return {
+          id: j.id, title: j.title, location, url: j.jobUrl, date: isoDate(j.publishedAt),
+          workplace: wt === 'hybrid' ? 'hybrid' : wt === 'remote' || j.isRemote ? 'remote' : 'onsite',
+          description: j.descriptionPlain,
+        }
+      })
+    }
+    case 'workable': {
+      const d = await getJson(`https://apply.workable.com/api/v1/widget/accounts/${b.slug}`) as {
+        jobs?: { shortcode: string; title: string; url: string; city?: string; country?: string
+          telecommuting?: boolean; published_on?: string; created_at?: string }[]
+      }
+      return (d.jobs ?? []).map(j => ({
+        id: j.shortcode, title: j.title, location: joinLoc(j.city, j.country), url: j.url,
+        date: isoDate(j.published_on ?? j.created_at),
+        workplace: j.telecommuting ? 'remote' : inferWorkplace(j.title) === 'hybrid' ? 'hybrid' : 'onsite',
+      }))
+    }
+    case 'smartrecruiters': {
+      const d = await getJson(`https://api.smartrecruiters.com/v1/companies/${b.slug}/postings`) as {
+        content?: { id: string; name: string; releasedDate?: string; company?: { identifier?: string }
+          location?: { city?: string; country?: string; remote?: boolean; hybrid?: boolean } }[]
+      }
+      return (d.content ?? []).map(j => ({
+        id: j.id, title: j.name,
+        location: joinLoc(j.location?.remote ? 'Remote' : null, j.location?.city, country(j.location?.country)),
+        url: `https://jobs.smartrecruiters.com/${j.company?.identifier ?? b.slug}/${j.id}`,
+        date: isoDate(j.releasedDate),
+        workplace: j.location?.remote ? 'remote' : j.location?.hybrid ? 'hybrid' : 'onsite',
+      }))
+    }
+    case 'breezy': {
+      const d = await getJson(`https://${b.slug}.breezy.hr/json`) as {
+        id: string; name: string; url: string; published_date?: string
+        location?: { name?: string; city?: string; country?: { name?: string }; is_remote?: boolean }
+      }[]
+      return (Array.isArray(d) ? d : []).map(j => ({
+        id: j.id, title: j.name, url: j.url, date: isoDate(j.published_date),
+        location: j.location?.name ?? joinLoc(j.location?.city, j.location?.country?.name),
+        workplace: j.location?.is_remote ? 'remote' : inferWorkplace(j.name) === 'hybrid' ? 'hybrid' : 'onsite',
+      }))
+    }
+  }
+}
+
+async function fromCompanies(query: string): Promise<SourcedJob[]> {
+  const settled = await Promise.allSettled(COMPANY_BOARDS.map(readBoard))
+  // A source is down only when every board failed; one rate-limited board
+  // should not hide the other sixteen.
+  if (settled.every(r => r.status === 'rejected')) {
+    throw (settled[0] as PromiseRejectedResult).reason
+  }
+
+  const jobs: SourcedJob[] = []
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled') return
+    const b = COMPANY_BOARDS[i]
+    for (const p of r.value) {
+      if (!looselyMatches(query, p.title)) continue
+      const el = classifyEligibility(p.location)
+      jobs.push({
+        id: `companies:${b.ats}:${b.slug}:${p.id}`,
+        title: p.title.trim(),
+        company: b.name,
+        companyUrl: null,
+        location: p.location || null,
+        date: p.date,
+        url: p.url,
+        source: 'companies',
+        description: summarise(p.description),
+        eligibility: el.level,
+        eligibilityNote: el.note,
+        workplace: p.workplace,
+        remote: p.workplace === 'remote',
+        visa: detectVisaSignal(`${p.title} ${p.description ?? ''}`),
+      })
+    }
+  })
+  return jobs
 }
 
 // ── Aggregate ─────────────────────────────────────────────────────
@@ -291,6 +708,11 @@ const ADAPTERS: Record<Exclude<JobSourceId, 'linkedin'>, (q: string) => Promise<
   jobicy: fromJobicy,
   remoteok: fromRemoteOk,
   arbeitnow: fromArbeitnow,
+  himalayas: fromHimalayas,
+  workingnomads: fromWorkingNomads,
+  weworkremotely: fromWeWorkRemotely,
+  hotnigerianjobs: fromHotNigerianJobs,
+  companies: fromCompanies,
 }
 
 export interface SourceOutcome {
@@ -328,6 +750,8 @@ export async function searchRemoteBoards(
   return { jobs, outcomes }
 }
 
+// ── Relevance ─────────────────────────────────────────────────────
+
 // Words that describe an employment arrangement rather than the work. A
 // posting matching only on these is not a match: "full" would otherwise carry
 // every "Full-time Gardener" into a search for "full stack developer".
@@ -338,6 +762,7 @@ const GENERIC_TERMS = new Set([
   'senior', 'junior', 'mid', 'level', 'lead', 'staff', 'principal',
   'entry', 'graduate', 'intern', 'internship', 'experienced',
   'and', 'the', 'for', 'with', 'your', 'our',
+  'nigeria', 'lagos', 'abuja', 'africa',
   // "software engineer" is a request for engineering work in general, not for
   // postings that happen to contain the word "software".
   'software',
@@ -351,7 +776,7 @@ const ROLE_NOUN = 'developer'
 // titled "Full Stack Engineer" — previously it matched neither token.
 const ROLE_SYNONYMS: Record<string, string> = {
   engineer: 'developer', engineering: 'developer', programmer: 'developer',
-  dev: 'developer', developer: 'developer',
+  dev: 'developer', developer: 'developer', developers: 'developer', engineers: 'developer',
 }
 
 /** Collapses spelling variants so both sides of a comparison agree. */
@@ -368,12 +793,35 @@ function canonicalise(text: string): string {
     .replace(/\bfront\s+end\b/g, 'frontend')
     .replace(/\bback\s+end\b/g, 'backend')
     .replace(/\bdev\s+ops\b/g, 'devops')
+    // A civil or electrical engineer is not a developer. Without this, a
+    // search for "software engineer" (which reduces to the role noun) fills
+    // the Nigeria results with site and power engineers from the local boards.
+    .replace(/\b(civil|electrical|mechanical|site|structural|chemical|petroleum|process|field|maintenance|sales|biomedical|production|hse|mining|marine|agricultural|instrumentation|building|geotechnical|reservoir|drilling|automation|electronics|power|plant|facility|facilities|water|environmental|quantity)\s+engineer(ing)?\b/g, '$1 engr')
+    .replace(/\b(curriculum|content|business|property|real estate|land|instructional|course|talent|training|community|brand|market|sales)\s+developers?\b/g, '$1 devr')
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
     .map(w => ROLE_SYNONYMS[w] ?? w)
     .join(' ')
 }
+
+/** The query words that actually discriminate between postings. Two-letter
+ *  technologies (Go, C#, AI, ML, QA) are kept; other short words are noise. */
+const SHORT_TERMS = new Set(['go', 'c#', 'c++', 'ai', 'ml', 'qa', 'ui', 'ux', 'r', 'js', 'ts'])
+export function meaningfulTerms(query: string): string[] {
+  return Array.from(
+    new Set(
+      canonicalise(query)
+        .split(' ')
+        .filter(t => (t.length >= 3 || SHORT_TERMS.has(t)) && !GENERIC_TERMS.has(t)),
+    ),
+  )
+}
+
+/** A title that names software work, read from the original wording. */
+const SOFTWARE_TITLE = /\b(developer|programmer|software|front[- ]?end|back[- ]?end|full[- ]?stack|devops|devsecops|sre|site reliability|mobile|ios|android|web|cloud|platform|machine learning|ml|ai|llm|qa|sdet|test automation|security engineer|infrastructure|data engineer|react|node|python|java|golang|rust|php|ruby|\.net|engineering manager|head of engineering|cto|blockchain|smart contract|firmware|embedded)\b/i
+
+const NON_SOFTWARE_TITLE = /\b(curriculum|content|business|property|real estate|land|instructional|course|talent|training|community|brand|market|sales)\s+developer/i
 
 /**
  * Re-filters results against the query — every source matches loosely.
@@ -384,15 +832,9 @@ function canonicalise(text: string): string {
  * place that decides a posting is actually the work that was asked for.
  */
 export function filterRelevant(jobs: SourcedJob[], query: string): SourcedJob[] {
-  const terms = Array.from(
-    new Set(
-      canonicalise(query)
-        .split(' ')
-        .filter(t => t.length >= 3 && !GENERIC_TERMS.has(t)),
-    ),
-  )
-  // A query of nothing but generic words cannot discriminate; keep everything
-  // rather than silently returning an empty page.
+  const terms = meaningfulTerms(query)
+  // A query of nothing but generic words cannot discriminate; the API
+  // rejects those, so this only guards direct callers.
   if (!terms.length) return jobs
 
   // The role noun is far too weak to match on alone: every posting is some
@@ -402,12 +844,83 @@ export function filterRelevant(jobs: SourcedJob[], query: string): SourcedJob[] 
   const specialities = terms.filter(t => t !== ROLE_NOUN)
   const required = specialities.length ? specialities : terms
 
+  // Bare "developer" / "software engineer": "engineer" alone would admit HVAC
+  // and service engineers, and a company name like "X Engineering" would
+  // admit its CFO. Require the title itself to name software work.
+  if (!specialities.length) {
+    return jobs.filter(j => SOFTWARE_TITLE.test(j.title ?? '') && !NON_SOFTWARE_TITLE.test(j.title ?? ''))
+  }
+
   return jobs.filter(j => {
     const hay = canonicalise(
       `${j.title ?? ''} ${j.company ?? ''} ${(j.keywords ?? []).join(' ')}`,
     )
-    // Whole words only: substring matching lets "art" match "start".
-    return required.some(t => new RegExp(`\\b${t.replace(/[+#]/g, '\\$&')}\\b`).test(hay))
+    // Whole words only: substring matching lets "art" match "start". The
+    // lookarounds stand in for \b, which never matches after "#" or "+".
+    return required.some(t => new RegExp(`(?<![a-z0-9+#])${t.replace(/[+#]/g, '\\$&')}(?![a-z0-9+#])`).test(hay))
+  })
+}
+
+// ── Filters ───────────────────────────────────────────────────────
+
+export interface JobFilters {
+  mode: SearchMode
+  /** Days; 0 means any age. */
+  jobage: number
+  workplace?: Workplace
+  location?: string
+  africaOnly: boolean
+  sponsorOnly: boolean
+}
+
+/** Location words that mean "work from anywhere" rather than a place. */
+const ANYWHERE_LOCATION = /^(remote|anywhere|worldwide|global)$/i
+const AFRICA_LOCATION = /^(africa|west africa|emea)$/i
+
+function matchesLocation(j: SourcedJob, wanted: string): boolean {
+  if (ANYWHERE_LOCATION.test(wanted)) return j.workplace === 'remote'
+  // A remote job open to Nigeria can be done from any Nigerian city.
+  if ((NIGERIA.test(wanted) || AFRICA_LOCATION.test(wanted)) && j.workplace === 'remote' && j.eligibility === 'africa-ok') {
+    return true
+  }
+  if (AFRICA_LOCATION.test(wanted)) return j.eligibility === 'africa-ok'
+  const hay = `${j.location ?? ''} ${j.eligibilityNote ?? ''}`.toLowerCase()
+  // Every word of "Port Harcourt" must appear, but in any order or field.
+  return wanted.toLowerCase().split(/[\s,]+/).filter(Boolean).every(w => hay.includes(w))
+}
+
+/** Whether a job belongs in the mode at all, whichever source produced it. */
+function fitsMode(j: SourcedJob, mode: SearchMode): boolean {
+  switch (mode) {
+    case 'remote':     return j.workplace === 'remote'
+    case 'nigeria':    return isInNigeria(j.location) || (j.workplace === 'remote' && j.eligibility === 'africa-ok')
+    case 'relocation': return j.workplace !== 'remote' && !isInNigeria(j.location)
+  }
+}
+
+/**
+ * Applies every user filter to every source alike. Sources each honour a
+ * different subset of these upstream (LinkedIn takes a date and location,
+ * the boards take neither), so the API cannot rely on them.
+ */
+export function applyFilters(jobs: SourcedJob[], f: JobFilters): SourcedJob[] {
+  const cutoff = f.jobage > 0
+    ? new Date(Date.now() - f.jobage * 86400000).toISOString().slice(0, 10)
+    : null
+
+  return jobs.filter(j => {
+    if (!fitsMode(j, f.mode)) return false
+    // An undated posting cannot be shown to be recent, so a date filter
+    // excludes it rather than letting it through.
+    if (cutoff && (!j.date || j.date < cutoff)) return false
+    if (f.workplace && j.workplace !== f.workplace) return false
+    if (f.location && !matchesLocation(j, f.location)) return false
+    if (f.africaOnly && j.eligibility !== 'africa-ok') return false
+    // A posting that says it will not sponsor is useless when relocating,
+    // whatever the register says about the company.
+    if (f.mode === 'relocation' && j.visa === 'denies') return false
+    if (f.sponsorOnly && !(j.ukSponsor || j.visa === 'offers')) return false
+    return true
   })
 }
 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { fetcher } from '@/lib/fetcher'
+import { clearPersistentState } from '@/lib/usePersistentState'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -28,6 +29,8 @@ export default function SettingsPage() {
   async function signOut() {
     setSigningOut(true)
     await createSupabaseBrowserClient().auth.signOut()
+    // Saved searches and practice answers belong to this account.
+    clearPersistentState()
     router.replace('/auth')
   }
 

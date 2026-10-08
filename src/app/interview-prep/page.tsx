@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { usePersistentState } from '@/lib/usePersistentState'
 import useSWR from 'swr'
 import {
   BrainCircuit, Loader2, Zap, CheckCircle2, XCircle,
@@ -179,7 +180,11 @@ function WrittenSection({
   ratingIdx: number | null
   onRate: (i: number) => void
 }) {
-  const [showModel, setShowModel] = useState<boolean[]>(new Array(questions.length).fill(false))
+  // Keyed to this question set, so a newly generated set starts hidden.
+  const [showModel, setShowModel] = usePersistentState<boolean[]>(
+    `interviewPrep.showModel:${questions[0]?.q ?? ''}`,
+    new Array(questions.length).fill(false),
+  )
 
   return (
     <div style={{ maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -480,26 +485,28 @@ export default function InterviewPrepPage() {
   const { data: appsData } = useSWR<{ data: JobApplication[] }>('/api/applications', fetcher)
   const apps = (appsData?.data ?? []).filter(a => a.role)
 
-  const [role, setRole]           = useState('')
-  const [generating, setGenerating] = useState(false)
-  const [error, setError]         = useState<string | null>(null)
-  const [questions, setQuestions] = useState<Questions | null>(null)
-  const [tab, setTab]             = useState<Tab>('mcq')
+  // Kept across page changes (see usePersistentState): the generated set,
+  // every answer and rating. Only in-flight flags are memory-only.
+  const [role, setRole]           = usePersistentState('interviewPrep.role', '')
+  const [generating, setGenerating] = usePersistentState('interviewPrep.generating', false, { session: false })
+  const [error, setError]         = usePersistentState<string | null>('interviewPrep.error', null)
+  const [questions, setQuestions] = usePersistentState<Questions | null>('interviewPrep.questions', null)
+  const [tab, setTab]             = usePersistentState<Tab>('interviewPrep.tab', 'mcq')
 
   // MCQ
-  const [mcqAnswers, setMcqAnswers] = useState<number[]>([])
-  const [submitted, setSubmitted]   = useState(false)
+  const [mcqAnswers, setMcqAnswers] = usePersistentState<number[]>('interviewPrep.mcqAnswers', [])
+  const [submitted, setSubmitted]   = usePersistentState('interviewPrep.submitted', false)
 
   // Written
-  const [writtenAnswers, setWrittenAnswers] = useState<string[]>([])
-  const [ratings, setRatings]   = useState<(Rating | null)[]>([])
-  const [ratingIdx, setRatingIdx] = useState<number | null>(null)
+  const [writtenAnswers, setWrittenAnswers] = usePersistentState<string[]>('interviewPrep.writtenAnswers', [])
+  const [ratings, setRatings]   = usePersistentState<(Rating | null)[]>('interviewPrep.ratings', [])
+  const [ratingIdx, setRatingIdx] = usePersistentState<number | null>('interviewPrep.ratingIdx', null, { session: false })
 
   // Project suggester: reads the CV and, when given one, the job description.
-  const [jobDesc, setJobDesc]         = useState('')
-  const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null)
-  const [suggesting, setSuggesting]   = useState(false)
-  const [suggestError, setSuggestError] = useState<string | null>(null)
+  const [jobDesc, setJobDesc]         = usePersistentState('interviewPrep.jobDesc', '')
+  const [suggestions, setSuggestions] = usePersistentState<Suggestion[] | null>('interviewPrep.suggestions', null)
+  const [suggesting, setSuggesting]   = usePersistentState('interviewPrep.suggesting', false, { session: false })
+  const [suggestError, setSuggestError] = usePersistentState<string | null>('interviewPrep.suggestError', null)
 
   // Prefill role from ?role= (used by Skills Audit's "practice these gaps").
   // window.location.search instead of useSearchParams() so the page keeps

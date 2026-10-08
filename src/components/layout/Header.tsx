@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Sun, Moon, Monitor, LogOut } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/useTheme'
+import { clearPersistentState } from '@/lib/usePersistentState'
 import NotificationBell from './NotificationBell'
 import WindowControls, { useIsDesktopShell } from './WindowControls'
 import Logo from '../Logo'
@@ -57,6 +58,8 @@ export default function Header() {
   async function signOut() {
     const supabase = createSupabaseBrowserClient()
     await supabase.auth.signOut()
+    // Saved searches and practice answers belong to this account.
+    clearPersistentState()
     router.replace('/auth')
   }
 

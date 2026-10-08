@@ -16,8 +16,11 @@ export interface Capabilities {
   whatsapp: boolean
   /** Optional private job-source adapter is installed. */
   linkedinSearch: boolean
+  /** Gmail credentials are set, so cover letters and job-alert digests can
+   *  be emailed. A property of the server, not of the user's account. */
+  email: boolean
   /** Human-readable reason per disabled capability, for the UI to show. */
-  reasons: Partial<Record<'whatsapp' | 'linkedinSearch', string>>
+  reasons: Partial<Record<'whatsapp' | 'linkedinSearch' | 'email', string>>
 }
 
 /** Set by the desktop shell (see desktop/hirekit.c). */
@@ -63,5 +66,10 @@ export function getCapabilities(): Capabilities {
       linkedInLoadError() ?? 'Optional adapter not installed in this deployment.'
   }
 
-  return { desktop, whatsapp: persistent, linkedinSearch, reasons }
+  const email = !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD)
+  if (!email) {
+    reasons.email = 'GMAIL_USER and GMAIL_APP_PASSWORD are not set on this server, so nothing can be emailed.'
+  }
+
+  return { desktop, whatsapp: persistent, linkedinSearch, email, reasons }
 }

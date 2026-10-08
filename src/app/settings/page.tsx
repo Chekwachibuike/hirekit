@@ -19,6 +19,7 @@ export default function SettingsPage() {
   // Integration statuses (best-effort — cards degrade gracefully if a check fails)
   const { data: googleStatus } = useSWR<{ connected: boolean }>('/api/calendar/google/status', fetcher)
   const { data: waStatus }     = useSWR<{ ready: boolean }>('/api/whatsapp', fetcher)
+  const { data: caps }         = useSWR<{ email: boolean }>('/api/capabilities', fetcher)
 
   useEffect(() => {
     createSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
@@ -52,12 +53,17 @@ export default function SettingsPage() {
       action: 'Manage on WhatsApp page',
     },
     {
-      name: 'Email (SMTP)',
+      // A server setting, not something each account connects: the label
+      // says so, rather than claiming every user is "Connected".
+      name: 'Email sending',
       icon: Mail,
-      connected: true, // configured via .env.local — no runtime check endpoint
-      desc: 'Sends cover letters from the Cover Letters page',
+      connected: !!caps?.email,
+      labels: ['Set up on server', 'Not set up'] as const,
+      desc: caps?.email
+        ? 'Cover letters and job-alert emails are sent from the server\u2019s Gmail account'
+        : 'Set GMAIL_USER and GMAIL_APP_PASSWORD on the server to send cover letters and alert emails',
       href: '/cover-letters',
-      action: 'Configured in .env.local',
+      action: 'Configured on the server',
     },
   ]
 
@@ -119,7 +125,7 @@ export default function SettingsPage() {
               border: `1px solid ${item.connected ? 'rgba(0,168,133,0.2)' : 'var(--c-border)'}`,
             }}>
               {item.connected ? <Check size={11} /> : <X size={11} />}
-              {item.connected ? 'Connected' : 'Not connected'}
+              {'labels' in item && item.labels ? item.labels[item.connected ? 0 : 1] : item.connected ? 'Connected' : 'Not connected'}
             </span>
           </Link>
         ))}

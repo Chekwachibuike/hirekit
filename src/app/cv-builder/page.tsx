@@ -646,7 +646,7 @@ export default function CVBuilderPage() {
           </div>
 
           {uploadErr && (
-            <p style={{ fontSize: 11, color: '#dc2626', marginTop: 6, padding: '5px 8px', background: '#fef2f2', borderRadius: 4 }}>{uploadErr}</p>
+            <p style={{ fontSize: 11, color: 'var(--c-danger-text)', marginTop: 6, padding: '5px 8px', background: 'var(--c-danger-bg)', borderRadius: 4 }}>{uploadErr}</p>
           )}
         </div>
 
@@ -724,7 +724,7 @@ export default function CVBuilderPage() {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 14px', borderRadius: 'var(--r-md)',
               background: generating ? 'var(--c-bg-4)' : 'var(--c-violet)',
-              border: 'none', color: '#fff',
+              border: 'none', color: generating ? 'var(--c-text-dim)' : '#fff',
               fontSize: 12, fontWeight: 600, cursor: generating ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-body)', opacity: generating ? 0.7 : 1,
             }}>
@@ -736,10 +736,10 @@ export default function CVBuilderPage() {
 
         {/* Error banner */}
         {error && (
-          <div style={{ padding: '9px 20px', background: '#fef2f2', borderBottom: '1px solid #fecaca', color: '#dc2626', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: '9px 20px', background: 'var(--c-danger-bg)', borderBottom: '1px solid var(--c-danger-border)', color: 'var(--c-danger-text)', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>{error}</span>
             {error.toLowerCase().includes('profile') && (
-              <Link href="/personal-info" style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#dc2626', fontWeight: 600, fontSize: 11, textDecoration: 'underline' }}>
+              <Link href="/personal-info" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--c-danger-text)', fontWeight: 600, fontSize: 11, textDecoration: 'underline' }}>
                 Go to Personal Info <ArrowRight size={10} />
               </Link>
             )}
@@ -838,7 +838,7 @@ export default function CVBuilderPage() {
 
       {/* ── Generate for Role Modal ── */}
       {genModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={closeGenModal}>
           <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: 28, width: 520, maxHeight: '88vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>

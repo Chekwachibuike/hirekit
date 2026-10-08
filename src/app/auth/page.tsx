@@ -199,7 +199,7 @@ export default function AuthPage() {
 
             {/* Errors / info */}
             {error && (
-              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 13 }}>
+              <div style={{ background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', color: 'var(--c-danger-text)', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 13 }}>
                 {error}
               </div>
             )}

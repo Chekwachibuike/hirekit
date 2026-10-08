@@ -168,7 +168,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1100 }}>
+    <div style={{ padding: '28px 32px' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
@@ -185,7 +185,7 @@ export default function ProjectsPage() {
           <SecondaryBtn icon={Download} label="Import from portfolio" onClick={() => setImportOpen(true)} />
           <button onClick={openAdd} style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 'var(--r-md)',
-            background: 'var(--c-gold)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
+            background: 'var(--c-gold)', border: 'none', color: 'var(--c-on-gold)', fontSize: 13, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'var(--font-body)',
           }}>
             <Plus size={15} /> Add Project
@@ -349,7 +349,7 @@ export default function ProjectsPage() {
               </MField>
             </div>
 
-            {formError && <p role="alert" style={{ fontSize: 12, color: '#dc2626' }}>{formError}</p>}
+            {formError && <p role="alert" style={{ fontSize: 12, color: 'var(--c-danger-text)' }}>{formError}</p>}
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
@@ -357,7 +357,7 @@ export default function ProjectsPage() {
             <button onClick={saveProject} disabled={!form.title.trim() || saving} style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 'var(--r-md)',
               background: !form.title.trim() || saving ? 'var(--c-bg-4)' : 'var(--c-gold)',
-              border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
+              border: 'none', color: !form.title.trim() || saving ? 'var(--c-text-dim)' : 'var(--c-on-gold)', fontSize: 13, fontWeight: 600,
               cursor: !form.title.trim() || saving ? 'default' : 'pointer', fontFamily: 'var(--font-body)',
             }}>
               {saving ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
@@ -483,7 +483,7 @@ function CategorySelect({ id, value, categories, onChange, onCreated }: {
             placeholder="New category" style={{ ...inp, flex: 1 }} />
           <button type="button" aria-label="Create category" onClick={create} style={{ ...ghostBtn, padding: '6px 9px' }}><Check size={13} /></button>
         </div>
-        {err && <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>{err}</p>}
+        {err && <p style={{ fontSize: 11, color: 'var(--c-danger-text)', marginTop: 4 }}>{err}</p>}
       </div>
     )
   }
@@ -620,7 +620,7 @@ function PortfolioPanel({ conn, onChange }: { conn: PortfolioConnection; onChang
                 onClick={() => confirm('Make a new link? The current one stops working, so your portfolio needs the new one before its next rebuild.') && act('token', () => send('/api/portfolio-connection', 'POST', { action: 'token' }))}>
                 <RefreshCw size={12} /> New link
               </button>
-              <button type="button" style={{ ...ghostBtn, color: '#dc2626' }} disabled={busy !== null}
+              <button type="button" style={{ ...ghostBtn, color: 'var(--c-danger-text)' }} disabled={busy !== null}
                 onClick={() => confirm('Revoke the feed link? Your portfolio will fall back to its built-in project list.') && act('revoke', () => send('/api/portfolio-connection', 'DELETE'))}>
                 Revoke
               </button>
@@ -663,7 +663,7 @@ function PortfolioPanel({ conn, onChange }: { conn: PortfolioConnection; onChang
         </p>
       </Step>
 
-      {err && <p role="alert" style={{ fontSize: 12, color: '#dc2626' }}>{err}</p>}
+      {err && <p role="alert" style={{ fontSize: 12, color: 'var(--c-danger-text)' }}>{err}</p>}
     </div>
   )
 }
@@ -715,12 +715,12 @@ function ImportModal({ initialUrl, onClose, onImported }: { initialUrl: string; 
         </button>
       </div>
 
-      {err && <p role="alert" style={{ fontSize: 12, color: '#dc2626', marginBottom: 10 }}>{err}</p>}
+      {err && <p role="alert" style={{ fontSize: 12, color: 'var(--c-danger-text)', marginBottom: 10 }}>{err}</p>}
 
       {done ? (
         <div style={{ fontSize: 13, color: 'var(--c-text)', lineHeight: 1.7 }}>
           <p style={{ fontWeight: 700, color: 'var(--c-teal)' }}>Imported {done.imported.length} project{done.imported.length === 1 ? '' : 's'}.</p>
-          {done.failed.map(f => <p key={f.title} style={{ fontSize: 12, color: '#dc2626' }}>{f.title}: {f.error}</p>)}
+          {done.failed.map(f => <p key={f.title} style={{ fontSize: 12, color: 'var(--c-danger-text)' }}>{f.title}: {f.error}</p>)}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}><button onClick={onClose} style={ghostBtn}>Done</button></div>
         </div>
       ) : items && (
@@ -752,7 +752,7 @@ function ImportModal({ initialUrl, onClose, onImported }: { initialUrl: string; 
           <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end', alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--c-text-dim)', marginRight: 'auto' }}>{picked.size} selected</span>
             <button onClick={onClose} style={ghostBtn}>Cancel</button>
-            <button onClick={runImport} disabled={busy || picked.size === 0} style={{ ...ghostBtn, background: picked.size ? 'var(--c-gold)' : 'var(--c-bg-4)', color: '#fff', border: 'none' }}>
+            <button onClick={runImport} disabled={busy || picked.size === 0} style={{ ...ghostBtn, background: picked.size ? 'var(--c-gold)' : 'var(--c-bg-4)', color: picked.size ? 'var(--c-on-gold)' : 'var(--c-text-dim)', border: 'none' }}>
               {busy ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={12} />} Import {picked.size || ''}
             </button>
           </div>
@@ -780,7 +780,7 @@ const code: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 11
 
 function Modal({ title, onClose, children, width = 560 }: { title: string; onClose: () => void; children: React.ReactNode; width?: number }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
       <div role="dialog" aria-label={title} style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '26px 28px', width, maxWidth: 'calc(100vw - 32px)', maxHeight: '88vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--c-text)' }}>{title}</h2>
@@ -817,7 +817,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 
 function ErrorBar({ text, onClose }: { text: string; onClose: () => void }) {
   return (
-    <div role="alert" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '8px 12px', marginBottom: 16 }}>
+    <div role="alert" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--c-danger-text)', background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', borderRadius: 'var(--r-md)', padding: '8px 12px', marginBottom: 16 }}>
       {text}
       <button aria-label="Dismiss" onClick={onClose} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}><X size={12} /></button>
     </div>

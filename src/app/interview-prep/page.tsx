@@ -158,7 +158,7 @@ function MCQSection({
             style={{
               padding: '9px 22px', borderRadius: 'var(--r-md)',
               background: answered < questions.length ? 'var(--c-bg-4)' : 'var(--c-teal)',
-              border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
+              border: 'none', color: answered < questions.length ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600,
               cursor: answered < questions.length ? 'default' : 'pointer',
               fontFamily: 'var(--font-body)',
             }}>
@@ -232,7 +232,7 @@ function WrittenSection({
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '7px 16px', borderRadius: 'var(--r-md)',
                   background: !hasAnswer || ratingIdx !== null ? 'var(--c-bg-4)' : 'var(--c-violet)',
-                  border: 'none', color: '#fff', fontSize: 12, fontWeight: 600,
+                  border: 'none', color: !hasAnswer || ratingIdx !== null ? 'var(--c-text-dim)' : '#fff', fontSize: 12, fontWeight: 600,
                   cursor: !hasAnswer || ratingIdx !== null ? 'default' : 'pointer',
                   fontFamily: 'var(--font-body)',
                 }}>
@@ -405,7 +405,7 @@ function ProjectsSection({
       </div>
 
       {error && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 13 }}>
+        <div style={{ background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', color: 'var(--c-danger-text)', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 13 }}>
           {error}
         </div>
       )}
@@ -639,7 +639,7 @@ export default function InterviewPrepPage() {
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '9px 22px', borderRadius: 'var(--r-md)',
               background: generating || !role.trim() ? 'var(--c-bg-4)' : 'var(--c-coral)',
-              border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
+              border: 'none', color: generating || !role.trim() ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600,
               cursor: generating || !role.trim() ? 'default' : 'pointer',
               fontFamily: 'var(--font-body)', opacity: generating ? 0.7 : 1,
               whiteSpace: 'nowrap',
@@ -652,7 +652,7 @@ export default function InterviewPrepPage() {
           </button>
         </div>
         {error && (
-          <div style={{ marginTop: 10, fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '8px 12px' }}>
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--c-danger-text)', background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', borderRadius: 'var(--r-md)', padding: '8px 12px' }}>
             {error}
           </div>
         )}

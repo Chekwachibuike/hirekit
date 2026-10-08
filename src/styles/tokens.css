@@ -65,6 +65,13 @@
   --c-red:         #E03255;
   --c-amber:       #E09020;
   --c-red-dim:     rgba(224,50,85,0.11);
+  /* Error banners. Pages used fixed light-pink hexes here, which glowed
+     like a light-mode leftover on the dark theme. */
+  --c-danger-bg:     #FEF2F2;
+  --c-danger-border: #FECACA;
+  --c-danger-text:   #B91C1C;
+  /* Text on gold buttons: white on #D4A017 is about 2.3:1, unreadable. */
+  --c-on-gold:       #2B1F00;
 
   /* ── Text ───────────────────────────────────────────── */
   --c-text:        #101828;
@@ -149,6 +156,10 @@
   --c-red:         #FF5C7C;
   --c-amber:       #F0A83A;
   --c-red-dim:     rgba(255,92,124,0.16);
+  --c-danger-bg:     rgba(255,92,124,0.10);
+  --c-danger-border: rgba(255,92,124,0.30);
+  --c-danger-text:   #FF8FA3;
+  --c-on-gold:       #1F1600;
 
   --c-text:        #ECEDF1;
   --c-text-muted:  rgba(236,237,241,0.60);
@@ -244,3 +255,21 @@ main > * { zoom: var(--content-zoom); }
 
 main [style*="position:fixed"],
 main [style*="position: fixed"] { zoom: calc(1 / var(--content-zoom)); }
+
+/* ── Keyboard focus ─────────────────────────────────────
+   Most inputs and buttons set outline:none inline, which left keyboard
+   users with no visible focus anywhere in the app. :focus-visible shows
+   the ring only for keyboard focus (and text fields, where the caret
+   position matters), never on mouse clicks. !important because the inline
+   outline:none would otherwise win. */
+:where(a, button, input, select, textarea, summary, [tabindex], [role="radio"], [role="tab"]):focus-visible {
+  outline: 2px solid var(--c-border-hot) !important;
+  outline-offset: 2px;
+}
+
+/* ── Form controls ──────────────────────────────────────
+   Browsers do not let inputs, buttons and textareas inherit the page font:
+   textareas fell back to monospace (the Personal Info summary) and inputs
+   to the system font. :where() keeps this at zero specificity, so any
+   inline fontFamily still wins. */
+:where(button, input, select, textarea) { font-family: inherit; }

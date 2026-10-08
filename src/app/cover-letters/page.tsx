@@ -251,7 +251,7 @@ export default function CoverLettersPage() {
 
       {/* ── Generate Modal ── */}
       {modal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => !generating && setModal(false)}>
           <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '28px', width: 580, maxHeight: '90vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
@@ -349,7 +349,7 @@ export default function CoverLettersPage() {
             )}
 
             {error && (
-              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 'var(--r-md)', padding: '10px 14px', marginTop: 12, fontSize: 13 }}>{error}</div>
+              <div style={{ background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', color: 'var(--c-danger-text)', borderRadius: 'var(--r-md)', padding: '10px 14px', marginTop: 12, fontSize: 13 }}>{error}</div>
             )}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 22, justifyContent: 'flex-end' }}>
@@ -372,7 +372,7 @@ export default function CoverLettersPage() {
 
       {/* ── Send via Email Modal ── */}
       {sendModal && viewing && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => !sending && setSendModal(false)}>
           <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '28px', width: 440 }}
             onClick={e => e.stopPropagation()}>
@@ -384,11 +384,11 @@ export default function CoverLettersPage() {
             <ModalField label="Recipient email *" htmlFor="send-to">
               <input id="send-to" type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="recruiter@company.com" disabled={sending || sendSuccess} style={fieldInput} autoFocus />
             </ModalField>
-            {sendError && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 'var(--r-md)', padding: '10px 14px', marginTop: 14, fontSize: 13 }}>{sendError}</div>}
+            {sendError && <div style={{ background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', color: 'var(--c-danger-text)', borderRadius: 'var(--r-md)', padding: '10px 14px', marginTop: 14, fontSize: 13 }}>{sendError}</div>}
             {sendSuccess && <div style={{ background: 'rgba(0,168,133,0.08)', border: '1px solid rgba(0,168,133,0.3)', color: 'var(--c-teal)', borderRadius: 'var(--r-md)', padding: '10px 14px', marginTop: 14, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><Check size={14} /> Email sent!</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
               <button onClick={() => setSendModal(false)} disabled={sending} style={{ padding: '9px 18px', borderRadius: 'var(--r-md)', background: 'transparent', border: '1px solid var(--c-border-md)', color: 'var(--c-text-muted)', fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>Cancel</button>
-              <button onClick={sendEmail} disabled={sending || !emailTo || sendSuccess} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 'var(--r-md)', background: sending || !emailTo || sendSuccess ? 'var(--c-bg-4)' : 'var(--c-violet)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: sending || !emailTo || sendSuccess ? 'default' : 'pointer', fontFamily: 'var(--font-body)', opacity: sending ? 0.7 : 1 }}>
+              <button onClick={sendEmail} disabled={sending || !emailTo || sendSuccess} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 'var(--r-md)', background: sending || !emailTo || sendSuccess ? 'var(--c-bg-4)' : 'var(--c-violet)', border: 'none', color: sending || !emailTo || sendSuccess ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600, cursor: sending || !emailTo || sendSuccess ? 'default' : 'pointer', fontFamily: 'var(--font-body)', opacity: sending ? 0.7 : 1 }}>
                 {sending ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
                 {sending ? 'Sending…' : 'Send'}
               </button>

@@ -93,6 +93,10 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
         <main style={{
           marginLeft: 'var(--sidebar-w)',
           flex: 1,
+          // A flex item defaults to min-width:auto, so a wide child (the
+          // six-column applications board) stretched the whole page sideways
+          // instead of scrolling inside its own container.
+          minWidth: 0,
           minHeight: 'calc(100vh - var(--topbar-h))',
           background: 'var(--c-bg)',
           // The sidebar and the content are two panels tucked under a flush

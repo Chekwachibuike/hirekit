@@ -233,7 +233,7 @@ export default function PersonalInfoPage() {
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 24px 60px' }}>
+    <div style={{ maxWidth: 760, padding: '28px 32px 60px' }}>
 
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -261,7 +261,7 @@ export default function PersonalInfoPage() {
       </div>
 
       {error && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 'var(--r-md)', padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
+        <div style={{ background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', color: 'var(--c-danger-text)', borderRadius: 'var(--r-md)', padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
           {error}
         </div>
       )}

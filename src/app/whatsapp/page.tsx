@@ -154,7 +154,7 @@ export default function WhatsAppPage() {
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '7px 14px', borderRadius: 'var(--r-md)',
               background: loading || isConnecting ? 'var(--c-bg-4)' : 'var(--c-teal)',
-              border: 'none', color: '#fff',
+              border: 'none', color: loading || isConnecting ? 'var(--c-text-dim)' : '#fff',
               fontSize: 13, fontWeight: 600,
               cursor: loading || isConnecting ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-body)', opacity: loading ? 0.7 : 1,
@@ -171,7 +171,7 @@ export default function WhatsAppPage() {
       {/* Startup error banner */}
       {status?.error && !isConnected && (
         <div style={{
-          background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626',
+          background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', color: 'var(--c-danger-text)',
           borderRadius: 'var(--r-lg)', padding: '14px 18px', marginBottom: 24,
           fontSize: 13, lineHeight: 1.6,
         }}>

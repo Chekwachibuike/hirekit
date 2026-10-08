@@ -164,9 +164,24 @@ export async function initWaClient() {
   // to open it, so a crashed session can never block the next Connect.
   await reapStaleSession()
   registerShutdownHooks()
+  startClient(Client, LocalAuth, executablePath, await dataRoot(), 1)
+}
 
+// Edge exits with code 0 and no stderr ("Failed to launch the browser process:
+// Code: 0") when it hands the launch off instead of starting: mid self-update
+// (two versions side by side under Application\), or a profile lock the first
+// reap missed. Both clear within seconds, so retry before surfacing an error.
+const MAX_LAUNCH_ATTEMPTS = 3
+
+function startClient(
+  Client: typeof import('whatsapp-web.js').Client,
+  LocalAuth: typeof import('whatsapp-web.js').LocalAuth,
+  executablePath: string,
+  dataPath: string,
+  attempt: number,
+) {
   const client = new Client({
-    authStrategy: new LocalAuth({ clientId: WA_CLIENT_ID, dataPath: await dataRoot() }),
+    authStrategy: new LocalAuth({ clientId: WA_CLIENT_ID, dataPath }),
     puppeteer: {
       headless: true,
       executablePath,
@@ -251,8 +266,23 @@ export async function initWaClient() {
   client.initialize().catch(async (err: unknown) => {
     console.error('[whatsapp] initialize failed', err)
     const msg = err instanceof Error ? err.message : String(err)
+    const launchFailed = msg.includes('Failed to launch the browser process') || msg.includes('already running')
+    if (launchFailed && attempt < MAX_LAUNCH_ATTEMPTS) {
+      // Keep _waClient set while retrying so a Connect click in the meantime
+      // doesn't start a second browser on the same profile.
+      try { await client.destroy() } catch { /* never started */ }
+      await new Promise(r => setTimeout(r, 2000 * attempt))
+      await reapStaleSession()
+      console.log(`[whatsapp] retrying launch (attempt ${attempt + 1}/${MAX_LAUNCH_ATTEMPTS})`)
+      startClient(Client, LocalAuth, executablePath, dataPath, attempt + 1)
+      return
+    }
     // Translate the common failure modes into something actionable
-    globalThis._waError = msg.includes('already running')
+    globalThis._waError = msg.includes('Failed to launch the browser process')
+      ? 'Microsoft Edge refused to start for WhatsApp after several tries. This usually ' +
+        'means Edge is installing an update — open Edge once (or restart the PC) to let ' +
+        'it finish, then click Connect again.'
+      : msg.includes('already running')
       ? 'A leftover browser session is holding the WhatsApp profile and could not be ' +
         'cleared automatically. Click Connect once more — if it still fails, the profile ' +
         'may be owned by another user account on this PC.'

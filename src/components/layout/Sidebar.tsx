@@ -44,7 +44,9 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
   const active = path === href || path.startsWith(href + '/')
 
   return (
-    <Link href={href} style={{
+    // The active item is marked by its fill and weight alone; a coloured
+    // edge bar was removed as decoration.
+    <Link href={href} aria-current={active ? 'page' : undefined} style={{
       position: 'relative',
       display: 'flex', alignItems: 'center', gap: 11,
       padding: '9px 12px 9px 14px', borderRadius: 'var(--r-md)',
@@ -67,12 +69,6 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
         }
       }}
     >
-      {/* Active indicator bar */}
-      <span style={{
-        position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-        width: 3, height: active ? 18 : 0, borderRadius: 999,
-        background: 'var(--c-violet-fill)', transition: 'height 0.2s ease',
-      }} />
       <Icon size={16} strokeWidth={active ? 2.4 : 2} />
       {label}
     </Link>

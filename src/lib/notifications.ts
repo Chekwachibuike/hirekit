@@ -116,7 +116,7 @@ export function buildNotifications(
     out.push({
       id: `alert:${a.alertId}:${a.latest}`, kind: 'job-alert',
       title: `${a.count} new job${a.count === 1 ? '' : 's'}: ${a.name}`,
-      detail: 'Found by your job alert. Open Job Search to see them.',
+      detail: 'From your saved search. Open to see them.',
       href: '/job-search?alerts=1', date: a.latest.slice(0, 10), urgent: true,
     })
   }

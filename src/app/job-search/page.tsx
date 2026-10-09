@@ -8,7 +8,7 @@ import { buildTrackedIndex, STATUS_LABELS, type TrackedApplication } from '@/lib
 import useSWR from 'swr'
 import {
   Search, Loader2, MapPin, Building2, Clock, ExternalLink,
-  BriefcaseBusiness, Plus, Check, Sparkles, X, ShieldAlert, ShieldCheck, FileText, BellRing, BellPlus,
+  BriefcaseBusiness, Plus, Check, Sparkles, X, ShieldAlert, ShieldCheck, FileText, Bookmark, BellPlus,
 } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
 import { validateQuery, validateLocation, QUERY_MAX, LOCATION_MAX } from '@/lib/job-search-params'
@@ -269,7 +269,7 @@ export default function JobSearchPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Could not save the alert')
-      setAlertNote(`Alert saved. ${json.openNow ? `${json.openNow} matching job${json.openNow === 1 ? ' is' : 's are'} open now; ` : ''}you'll be told about new ones each morning.`)
+      setAlertNote(`Search saved. ${json.openNow ? `${json.openNow} matching job${json.openNow === 1 ? ' is' : 's are'} open now; ` : ''}new ones will appear in the bell each morning.`)
       mutateAlerts()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the alert')
@@ -422,15 +422,18 @@ export default function JobSearchPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Job Search</h1>
           <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>LinkedIn, remote and Nigerian job boards, and the hiring pages of tech, energy and engineering employers — filtered for who can apply, checked for scams</p>
         </div>
+        {/* Managing saved searches lives here; their news goes to the bell,
+            the one place for everything new. */}
         <button onClick={() => setAlertsOpen(o => !o)} aria-expanded={alertsOpen}
+          title="Searches saved with Alert me. New matches also appear in the bell."
           style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 'var(--r-md)', flexShrink: 0,
             background: alertsOpen ? 'var(--c-violet-dim)' : 'var(--c-bg-2)', border: '1px solid var(--c-border-md)',
             color: alertsOpen ? 'var(--c-violet)' : 'var(--c-text)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)',
           }}>
-          <BellRing size={14} /> Alerts
+          <Bookmark size={14} /> Saved searches
           {newAlertCount > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--c-violet-fill)', color: '#fff' }}>{newAlertCount}</span>
+            <span aria-label={`${newAlertCount} new`} style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--c-violet-fill)', color: '#fff' }}>{newAlertCount}</span>
           )}
         </button>
       </div>
@@ -498,7 +501,7 @@ export default function JobSearchPage() {
           Search
         </button>
         <button onClick={saveAlert} disabled={!canSearch || savingAlert}
-          title="Save this search and get told each morning when new matching jobs are posted"
+          title="Save this search. Each morning, new matching jobs appear in the bell (top right)"
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 'var(--r-md)',
             background: 'var(--c-bg-2)', border: '1px solid var(--c-border-md)',

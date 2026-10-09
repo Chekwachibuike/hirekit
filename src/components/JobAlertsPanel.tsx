@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { BellRing, Loader2, RefreshCw, Trash2, ExternalLink, Play, Mail, MailX, Pause, Check, ChevronDown, ChevronRight } from 'lucide-react'
+import { Bookmark, Loader2, RefreshCw, Trash2, ExternalLink, Play, Mail, MailX, Pause, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { deleteWithUndo } from '@/lib/undo'
 
 // Saved searches and what they found. New matches come from the daily run
@@ -79,11 +79,11 @@ export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, o
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
         <div>
           <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <BellRing size={14} color="var(--c-violet)" /> Job alerts
+            <Bookmark size={14} color="var(--c-violet)" /> Saved searches
           </h2>
           <p style={{ fontSize: 11.5, color: 'var(--c-text-muted)', marginTop: 2 }}>
-            Saved searches, checked every morning. New postings appear here and in the bell
-            {emailConfigured ? ', and by email.' : '. (Email isn’t set up on this server, so no emails are sent.)'}
+            Checked every morning. New jobs show in the bell (top right) and are marked new here
+            {emailConfigured ? ', and are emailed to you.' : '. (Email isn’t set up on this server, so nothing is emailed.)'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -106,7 +106,7 @@ export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, o
 
       {alerts.length === 0 ? (
         <p style={{ fontSize: 12.5, color: 'var(--c-text-dim)', padding: '10px 0' }}>
-          No alerts yet. Search for something, e.g. &ldquo;graduate trainee&rdquo; in Nigeria or &ldquo;electrical engineer&rdquo;,
+          No saved searches yet. Search for something, e.g. &ldquo;graduate trainee&rdquo; in Nigeria or &ldquo;electrical engineer&rdquo;,
           then press <strong>Alert me</strong> to be told when new ones are posted.
         </p>
       ) : (
@@ -139,8 +139,8 @@ export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, o
                   <IconBtn label={a.active ? 'Pause' : 'Resume'} onClick={() => act(`active:${a.id}`, () => send('/api/job-alerts', 'PATCH', { id: a.id, active: !a.active }))}>
                     {a.active ? <Pause size={12} /> : <Check size={12} />}
                   </IconBtn>
-                  <IconBtn label="Delete alert" danger onClick={() => { onRemove(a.id); deleteWithUndo({
-                    label: `Deleted the alert "${a.name}"`,
+                  <IconBtn label="Delete saved search" danger onClick={() => { onRemove(a.id); deleteWithUndo({
+                    label: `Deleted the saved search "${a.name}"`,
                     remove: () => {},
                     restore: () => onChanged(),
                     commit: async () => { await fetch(`/api/job-alerts?id=${a.id}`, { method: 'DELETE', keepalive: true }); onChanged() },

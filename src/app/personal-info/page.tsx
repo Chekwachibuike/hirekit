@@ -249,7 +249,7 @@ export default function PersonalInfoPage() {
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
             padding: '9px 18px', borderRadius: 'var(--r-md)',
-            background: saved ? 'var(--c-teal)' : 'var(--c-violet)',
+            background: saved ? 'var(--c-teal-fill)' : 'var(--c-violet-fill)',
             color: '#fff', border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
             fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1,
             transition: 'background 0.2s',
@@ -280,7 +280,7 @@ export default function PersonalInfoPage() {
             transition: 'all 0.15s',
           }}
         >
-          <input {...getInputProps()} />
+          <input {...getInputProps()} aria-label="Upload your CV (PDF)" />
           {uploading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--c-violet)' }}>
               <Loader2 size={28} style={{ animation: 'spin 1s linear infinite' }} />
@@ -341,7 +341,7 @@ export default function PersonalInfoPage() {
                 style={{
                   padding: '8px 16px', fontSize: 13, fontWeight: 600,
                   borderRadius: 'var(--r-md)', border: 'none',
-                  background: uploading || pasteText.trim().length < 80 ? 'var(--c-bg-4)' : 'var(--c-violet)',
+                  background: uploading || pasteText.trim().length < 80 ? 'var(--c-bg-4)' : 'var(--c-violet-fill)',
                   color: uploading || pasteText.trim().length < 80 ? 'var(--c-text-muted)' : '#fff',
                   cursor: uploading || pasteText.trim().length < 80 ? 'not-allowed' : 'pointer',
                 }}
@@ -420,7 +420,7 @@ export default function PersonalInfoPage() {
           />
           <button
             type="button" onClick={addSkill}
-            style={{ padding: '8px 14px', borderRadius: 'var(--r-md)', background: 'var(--c-violet)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            style={{ padding: '8px 14px', borderRadius: 'var(--r-md)', background: 'var(--c-violet-fill)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
           >
             Add
           </button>

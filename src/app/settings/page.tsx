@@ -91,7 +91,7 @@ export default function SettingsPage() {
           display: 'flex', alignItems: 'center', gap: 7,
           padding: '8px 16px', borderRadius: 'var(--r-md)',
           background: 'rgba(224,50,85,0.08)', border: '1px solid rgba(224,50,85,0.25)',
-          color: '#E03255', fontSize: 13, fontWeight: 600,
+          color: 'var(--c-red)', fontSize: 13, fontWeight: 600,
           cursor: signingOut ? 'default' : 'pointer', fontFamily: 'var(--font-body)',
         }}>
           {signingOut ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <LogOut size={14} />}

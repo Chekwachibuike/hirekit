@@ -1,11 +1,13 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { useDialog } from '@/lib/useDialog'
 import useSWR from 'swr'
 import {
   Plus, X, Github, ExternalLink, Globe, Trash2, Edit3, Check, Layers, Loader2,
   Pin, Eye, EyeOff, ArrowUp, ArrowDown, Download, Link2, RefreshCw, Copy, Settings2, BookOpen,
 } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
+import { deleteWithUndo } from '@/lib/undo'
 import type { Project, ProjectCategory, ProjectVisibility, PortfolioConnection } from '@/lib/supabase'
 
 // Projects are the source of truth for the portfolio: pinned ones fill its
@@ -26,7 +28,7 @@ const emptyForm = (): Form => ({
 })
 
 const VIS: Record<ProjectVisibility, { label: string; hint: string; icon: React.ElementType; color: string }> = {
-  pinned:    { label: 'Pinned',    hint: 'Main grid on your portfolio, in the order below', icon: Pin,    color: 'var(--c-gold)' },
+  pinned:    { label: 'Pinned',    hint: 'Main grid on your portfolio, in the order below', icon: Pin,    color: 'var(--c-gold-text)' },
   published: { label: 'Published', hint: 'Listed on your portfolio, below the pinned ones', icon: Eye,    color: 'var(--c-teal)' },
   hidden:    { label: 'Hidden',    hint: 'Only in HireKit',                                 icon: EyeOff, color: 'var(--c-text-dim)' },
 }
@@ -150,10 +152,17 @@ export default function ProjectsPage() {
     }
   }
 
-  async function deleteProject(p: Project) {
-    if (!confirm(`Delete "${p.title}"?${p.visibility !== 'hidden' ? ' It will also disappear from your portfolio.' : ''}`)) return
-    mutate(cur => ({ data: (cur?.data ?? []).filter(x => x.id !== p.id) }), { revalidate: false })
-    try { await send(`/api/projects?id=${p.id}`, 'DELETE'); mutateConn() } catch { mutate() }
+  function deleteProject(p: Project) {
+    deleteWithUndo({
+      label: `Deleted "${p.title}"${p.visibility !== 'hidden' ? ', and removed it from your portfolio' : ''}`,
+      remove: () => mutate(cur => ({ data: (cur?.data ?? []).filter(x => x.id !== p.id) }), { revalidate: false }),
+      restore: () => mutate(),
+      commit: async () => {
+        const res = await fetch(`/api/projects?id=${p.id}`, { method: 'DELETE', keepalive: true })
+        if (!res.ok) throw new Error('Delete failed')
+        mutateConn()
+      },
+    })
   }
 
   function addTech() {
@@ -176,7 +185,7 @@ export default function ProjectsPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 4 }}>Projects</h1>
           <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>
             <strong style={{ color: 'var(--c-violet)' }}>{projects.length}</strong> projects ·{' '}
-            <strong style={{ color: 'var(--c-gold)' }}>{counts.pinned}</strong> pinned ·{' '}
+            <strong style={{ color: 'var(--c-gold-text)' }}>{counts.pinned}</strong> pinned ·{' '}
             <strong style={{ color: 'var(--c-teal)' }}>{counts.published}</strong> published on your portfolio
           </p>
         </div>
@@ -394,7 +403,7 @@ function ProjectCard({ p, color, category, position, pinnedCount, reorderable, o
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-            {position >= 0 && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--c-gold)', fontFamily: 'var(--font-mono)' }}>{String(position + 1).padStart(2, '0')}</span>}
+            {position >= 0 && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--c-gold-text)', fontFamily: 'var(--font-mono)' }}>{String(position + 1).padStart(2, '0')}</span>}
             <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</h3>
           </div>
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, fontWeight: 600, color, border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`, background: `color-mix(in srgb, ${color} 8%, transparent)` }}>
@@ -442,7 +451,7 @@ function ProjectCard({ p, color, category, position, pinnedCount, reorderable, o
             const on = vis === v
             return (
               <button key={v} role="radio" aria-checked={on} title={`${V.label}: ${V.hint}`} onClick={() => onVisibility(v)} style={{
-                display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 999, border: 'none',
+                display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', minHeight: 26, borderRadius: 999, border: 'none',
                 background: on ? 'var(--c-bg-2)' : 'transparent', color: on ? V.color : 'var(--c-text-dim)',
                 fontSize: 10, fontWeight: on ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font-body)',
                 boxShadow: on ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
@@ -627,7 +636,7 @@ function PortfolioPanel({ conn, onChange }: { conn: PortfolioConnection; onChang
             </span>
           </div>
         ) : (
-          <button type="button" style={{ ...ghostBtn, background: 'var(--c-violet)', color: '#fff', border: 'none' }} disabled={busy !== null}
+          <button type="button" style={{ ...ghostBtn, background: 'var(--c-violet-fill)', color: '#fff', border: 'none' }} disabled={busy !== null}
             onClick={() => act('token', () => send('/api/portfolio-connection', 'POST', { action: 'token' }))}>
             {busy === 'token' ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Link2 size={12} />} Create feed link
           </button>
@@ -740,7 +749,7 @@ function ImportModal({ initialUrl, onClose, onImported }: { initialUrl: string; 
                     style={{ marginTop: 3, accentColor: 'var(--c-gold)' }} />
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text)' }}>{c.title}</span>
-                    {c.pinned && <span style={{ fontSize: 10, color: 'var(--c-gold)', marginLeft: 6, fontWeight: 700 }}>PINNED</span>}
+                    {c.pinned && <span style={{ fontSize: 10, color: 'var(--c-gold-text)', marginLeft: 6, fontWeight: 700 }}>PINNED</span>}
                     {c.category && <span style={{ fontSize: 10, color: 'var(--c-text-dim)', marginLeft: 6 }}>{c.category}</span>}
                     {c.exists && <span style={{ fontSize: 10, color: 'var(--c-teal)', marginLeft: 6 }}>Already in HireKit</span>}
                     {c.blurb && <span style={{ display: 'block', fontSize: 11, color: 'var(--c-text-muted)', marginTop: 2 }}>{c.blurb}</span>}
@@ -779,9 +788,11 @@ const ghostBtn: React.CSSProperties = {
 const code: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--c-bg-4)', padding: '1px 5px', borderRadius: 4 }
 
 function Modal({ title, onClose, children, width = 560 }: { title: string; onClose: () => void; children: React.ReactNode; width?: number }) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  useDialog(panelRef, onClose)
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-      <div role="dialog" aria-label={title} style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '26px 28px', width, maxWidth: 'calc(100vw - 32px)', maxHeight: '88vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div ref={panelRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={title} style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '26px 28px', width, maxWidth: 'calc(100vw - 32px)', maxHeight: '88vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--c-text)' }}>{title}</h2>
           <button aria-label="Close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-muted)', padding: 4 }}><X size={18} /></button>
@@ -843,10 +854,10 @@ function LinkIcon({ href, icon: Icon, label }: { href: string; icon: React.Eleme
 function IconBtn({ icon: Icon, onClick, danger, label, disabled }: { icon: React.ElementType; onClick: () => void; danger?: boolean; label: string; disabled?: boolean }) {
   return (
     <button aria-label={label} title={label} onClick={onClick} disabled={disabled} style={{
-      background: 'none', border: 'none', cursor: disabled ? 'default' : 'pointer', padding: 5, borderRadius: 6,
+      background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', padding: 8, borderRadius: 6,
       color: 'var(--c-text-dim)', display: 'flex', opacity: disabled ? 0.3 : 1,
     }}
-      onMouseEnter={e => { if (!disabled) { (e.currentTarget as HTMLElement).style.color = danger ? '#E03255' : 'var(--c-text)'; (e.currentTarget as HTMLElement).style.background = 'var(--c-bg-4)' } }}
+      onMouseEnter={e => { if (!disabled) { (e.currentTarget as HTMLElement).style.color = danger ? 'var(--c-red)' : 'var(--c-text)'; (e.currentTarget as HTMLElement).style.background = 'var(--c-bg-4)' } }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--c-text-dim)'; (e.currentTarget as HTMLElement).style.background = 'none' }}
     >
       <Icon size={13} />

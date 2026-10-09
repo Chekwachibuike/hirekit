@@ -24,14 +24,14 @@ type Suggestion = {
 interface Questions { mcq: MCQ[]; written: WrittenQ[]; leetcode: LeetQ[] }
 interface Rating    { score: number; feedback: string; model_answer: string }
 
-const DIFF_COLOR = { Easy: '#00A885', Medium: '#D4A017', Hard: '#E03255' } as const
+const DIFF_COLOR = { Easy: 'var(--c-teal)', Medium: 'var(--c-gold-text)', Hard: 'var(--c-red)' } as const
 const DIFF_BG    = { Easy: 'rgba(0,168,133,0.1)', Medium: 'rgba(212,160,23,0.1)', Hard: 'rgba(224,50,85,0.1)' } as const
 
 // ── Helpers ───────────────────────────────────────────────────────
 function scoreColor(s: number) {
-  if (s >= 8) return '#00A885'
-  if (s >= 5) return '#D4A017'
-  return '#E03255'
+  if (s >= 8) return 'var(--c-teal)'
+  if (s >= 5) return 'var(--c-gold-text)'
+  return 'var(--c-red)'
 }
 
 function lcSlug(title: string) {
@@ -115,8 +115,8 @@ function MCQSection({
                   let border = 'var(--c-border)'
                   let color = 'var(--c-text-muted)'
                   if (!submitted && isChosen) { bg = 'var(--c-violet-dim)'; border = 'rgba(124,92,252,0.35)'; color = 'var(--c-violet)' }
-                  if (submitted && isCorrect) { bg = 'rgba(0,168,133,0.08)'; border = 'rgba(0,168,133,0.35)'; color = '#00A885' }
-                  if (submitted && isChosen && !isCorrect) { bg = 'rgba(224,50,85,0.06)'; border = 'rgba(224,50,85,0.3)'; color = '#E03255' }
+                  if (submitted && isCorrect) { bg = 'rgba(0,168,133,0.08)'; border = 'rgba(0,168,133,0.35)'; color = 'var(--c-teal)' }
+                  if (submitted && isChosen && !isCorrect) { bg = 'rgba(224,50,85,0.06)'; border = 'rgba(224,50,85,0.3)'; color = 'var(--c-red)' }
 
                   return (
                     <button key={oi} disabled={submitted}
@@ -152,12 +152,12 @@ function MCQSection({
         <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 14 }}>
           <p style={{ fontSize: 12, color: 'var(--c-text-dim)' }}>{answered} / {questions.length} answered</p>
           <div style={{ flex: 1, height: 4, background: 'var(--c-bg-4)', borderRadius: 999 }}>
-            <div style={{ height: '100%', borderRadius: 999, background: 'var(--c-violet)', width: `${(answered / questions.length) * 100}%`, transition: 'width 0.3s' }} />
+            <div style={{ height: '100%', borderRadius: 999, background: 'var(--c-violet-fill)', width: `${(answered / questions.length) * 100}%`, transition: 'width 0.3s' }} />
           </div>
           <button onClick={() => setSubmitted(true)} disabled={answered < questions.length}
             style={{
               padding: '9px 22px', borderRadius: 'var(--r-md)',
-              background: answered < questions.length ? 'var(--c-bg-4)' : 'var(--c-teal)',
+              background: answered < questions.length ? 'var(--c-bg-4)' : 'var(--c-teal-fill)',
               border: 'none', color: answered < questions.length ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600,
               cursor: answered < questions.length ? 'default' : 'pointer',
               fontFamily: 'var(--font-body)',
@@ -231,7 +231,7 @@ function WrittenSection({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '7px 16px', borderRadius: 'var(--r-md)',
-                  background: !hasAnswer || ratingIdx !== null ? 'var(--c-bg-4)' : 'var(--c-violet)',
+                  background: !hasAnswer || ratingIdx !== null ? 'var(--c-bg-4)' : 'var(--c-violet-fill)',
                   border: 'none', color: !hasAnswer || ratingIdx !== null ? 'var(--c-text-dim)' : '#fff', fontSize: 12, fontWeight: 600,
                   cursor: !hasAnswer || ratingIdx !== null ? 'default' : 'pointer',
                   fontFamily: 'var(--font-body)',
@@ -340,9 +340,9 @@ function LeetCodeSection({ questions, role }: { questions: LeetQ[]; role: string
 // projects that close the gap between them. Paste a JD and the gaps become
 // specific to that posting rather than to the role title in general.
 const DIFF_TONE = {
-  beginner:     { bg: 'rgba(0,168,133,0.1)',  fg: '#00A885' },
-  intermediate: { bg: 'rgba(212,160,23,0.1)', fg: '#D4A017' },
-  advanced:     { bg: 'rgba(224,50,85,0.1)',  fg: '#E03255' },
+  beginner:     { bg: 'rgba(0,168,133,0.1)',  fg: 'var(--c-teal)' },
+  intermediate: { bg: 'rgba(212,160,23,0.1)', fg: 'var(--c-gold-text)' },
+  advanced:     { bg: 'rgba(224,50,85,0.1)',  fg: 'var(--c-red)' },
 } as const
 
 function ProjectsSection({
@@ -387,7 +387,7 @@ function ProjectsSection({
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
             padding: '9px 16px', borderRadius: 'var(--r-md)', border: 'none',
-            background: loading || !role.trim() ? 'var(--c-bg-4)' : 'var(--c-violet)',
+            background: loading || !role.trim() ? 'var(--c-bg-4)' : 'var(--c-violet-fill)',
             color: loading || !role.trim() ? 'var(--c-text-muted)' : '#fff',
             fontSize: 13, fontWeight: 600,
             cursor: loading || !role.trim() ? 'not-allowed' : 'pointer',
@@ -638,7 +638,7 @@ export default function InterviewPrepPage() {
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '9px 22px', borderRadius: 'var(--r-md)',
-              background: generating || !role.trim() ? 'var(--c-bg-4)' : 'var(--c-coral)',
+              background: generating || !role.trim() ? 'var(--c-bg-4)' : 'var(--c-coral-fill)',
               border: 'none', color: generating || !role.trim() ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600,
               cursor: generating || !role.trim() ? 'default' : 'pointer',
               fontFamily: 'var(--font-body)', opacity: generating ? 0.7 : 1,

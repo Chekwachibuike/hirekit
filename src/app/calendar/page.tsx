@@ -1,6 +1,8 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useDialog } from '@/lib/useDialog'
 import useSWR from 'swr'
+import { deleteWithUndo } from '@/lib/undo'
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, Trash2, Clock,
   Calendar as CalendarIcon, Edit2, Link2, Unlink, Check, AlertCircle,
@@ -26,10 +28,10 @@ async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
 
 // ── Config ──────────────────────────────────────────────────
 const TYPE_CONFIG = {
-  interview:  { label: 'Interview',   color: '#7C5CFC', bg: 'rgba(124,92,252,0.12)' },
-  deadline:   { label: 'Deadline',    color: '#E03255', bg: 'rgba(224,50,85,0.12)'  },
-  study:      { label: 'Study',       color: '#00A885', bg: 'rgba(0,168,133,0.12)'  },
-  follow_up:  { label: 'Follow-up',   color: '#D4A017', bg: 'rgba(212,160,23,0.12)' },
+  interview:  { label: 'Interview',   color: 'var(--c-violet)', bg: 'rgba(124,92,252,0.12)' },
+  deadline:   { label: 'Deadline',    color: 'var(--c-red)', bg: 'rgba(224,50,85,0.12)'  },
+  study:      { label: 'Study',       color: 'var(--c-teal)', bg: 'rgba(0,168,133,0.12)'  },
+  follow_up:  { label: 'Follow-up',   color: 'var(--c-gold-text)', bg: 'rgba(212,160,23,0.12)' },
   other:      { label: 'Other',       color: '#6b7280', bg: 'rgba(107,114,128,0.12)'},
 } as const
 
@@ -104,6 +106,8 @@ function EventModal({
   saving: boolean
   deleting: boolean
 }) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  useDialog(panelRef, onClose)
   const ev = initial.event
   const initialRepeat = parseRRule(ev?.recurrence)
   const [form, setForm] = useState({
@@ -130,7 +134,7 @@ function EventModal({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={onClose}>
-      <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: 28, width: 460 }}
+      <div ref={panelRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={initial?.event ? 'Edit event' : 'New event'} style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: 28, width: 460, maxWidth: 'calc(100vw - 32px)' }}
         onClick={e => e.stopPropagation()}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
@@ -275,7 +279,7 @@ function MiniMonth({ year, month, selected, onSelect, onNav }: {
             <button key={i} onClick={() => onSelect(iso)} style={{
               width: '100%', aspectRatio: '1', border: 'none', borderRadius: '50%',
               fontSize: 10, cursor: 'pointer', fontFamily: 'var(--font-body)',
-              background: isSel ? 'var(--c-violet)' : isToday ? 'var(--c-violet-dim)' : 'transparent',
+              background: isSel ? 'var(--c-violet-fill)' : isToday ? 'var(--c-violet-dim)' : 'transparent',
               color: isSel ? '#fff' : isToday ? 'var(--c-violet)' : inMonth ? 'var(--c-text)' : 'var(--c-text-dim)',
               fontWeight: isToday || isSel ? 700 : 400,
             }}>{cell.getDate()}</button>
@@ -499,15 +503,14 @@ export default function CalendarPage() {
     }
   }, [mutate])
 
-  const deleteEvent = useCallback(async (id: string) => {
-    setDeleting(true)
-    try {
-      await fetch(`/api/calendar?id=${id}`, { method: 'DELETE' })
-    } finally {
-      mutate(ev => (ev ?? []).filter(e => e.id !== id), { revalidate: false })
-      setDeleting(false)
-      setModal(null)
-    }
+  const deleteEvent = useCallback((id: string, title?: string) => {
+    setModal(null)
+    deleteWithUndo({
+      label: `Deleted ${title ? `"${title}"` : 'event'}`,
+      remove: () => mutate(ev => (ev ?? []).filter(e => e.id !== id), { revalidate: false }),
+      restore: () => mutate(),
+      commit: () => fetch(`/api/calendar?id=${id}`, { method: 'DELETE', keepalive: true }),
+    })
   }, [mutate])
 
   // Upcoming events (next 10)
@@ -529,7 +532,7 @@ export default function CalendarPage() {
         <button onClick={() => setModal({ date: miniSel || today() })} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           width: '100%', padding: '9px 0', borderRadius: 'var(--r-md)',
-          background: 'var(--c-violet)', border: 'none',
+          background: 'var(--c-violet-fill)', border: 'none',
           color: '#fff', fontSize: 13, fontWeight: 600,
           cursor: 'pointer', fontFamily: 'var(--font-body)',
           boxShadow: '0 2px 12px rgba(124,92,252,0.28)',
@@ -726,7 +729,7 @@ export default function CalendarPage() {
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       width: 24, height: 24, borderRadius: '50%', marginBottom: 4,
                       fontSize: 12, fontWeight: isToday ? 700 : 400,
-                      background: isToday ? 'var(--c-violet)' : 'transparent',
+                      background: isToday ? 'var(--c-violet-fill)' : 'transparent',
                       color: isToday ? '#fff' : 'var(--c-text)',
                     }}>
                       {cell.getDate()}
@@ -789,7 +792,7 @@ export default function CalendarPage() {
                     <div style={{
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       width: 30, height: 30, borderRadius: '50%',
-                      background: isT ? 'var(--c-violet)' : 'transparent',
+                      background: isT ? 'var(--c-violet-fill)' : 'transparent',
                       color: isT ? '#fff' : 'var(--c-text)',
                       fontSize: 14, fontWeight: isT ? 700 : 500,
                     }}>
@@ -857,7 +860,7 @@ export default function CalendarPage() {
           initial={modal}
           onClose={() => !saving && !deleting && setModal(null)}
           onSave={form => saveEvent(form, modal.event?.id)}
-          onDelete={modal.event ? () => deleteEvent(modal.event!.id) : undefined}
+          onDelete={modal.event ? () => deleteEvent(modal.event!.id, modal.event!.title) : undefined}
           saving={saving}
           deleting={deleting}
         />

@@ -143,7 +143,7 @@ export default function WhatsAppPage() {
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '7px 14px', borderRadius: 'var(--r-md)',
               background: 'rgba(224,50,85,0.08)', border: '1px solid rgba(224,50,85,0.25)',
-              color: '#E03255', fontSize: 13, fontWeight: 600,
+              color: 'var(--c-red)', fontSize: 13, fontWeight: 600,
               cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-body)',
             }}>
               {loading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Power size={14} />}
@@ -153,7 +153,7 @@ export default function WhatsAppPage() {
             <button onClick={connect} disabled={loading || isConnecting} style={{
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '7px 14px', borderRadius: 'var(--r-md)',
-              background: loading || isConnecting ? 'var(--c-bg-4)' : 'var(--c-teal)',
+              background: loading || isConnecting ? 'var(--c-bg-4)' : 'var(--c-teal-fill)',
               border: 'none', color: loading || isConnecting ? 'var(--c-text-dim)' : '#fff',
               fontSize: 13, fontWeight: 600,
               cursor: loading || isConnecting ? 'not-allowed' : 'pointer',
@@ -213,7 +213,7 @@ export default function WhatsAppPage() {
 
         {isConnected && (
           <div style={{ padding: '4px 12px', borderRadius: 999, background: 'rgba(0,168,133,0.1)', border: '1px solid rgba(0,168,133,0.2)', fontSize: 11, fontWeight: 700, color: 'var(--c-teal)', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--c-teal)', display: 'inline-block', animation: 'pulse 2s ease infinite' }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--c-teal-fill)', display: 'inline-block', animation: 'pulse 2s ease infinite' }} />
             LIVE
           </div>
         )}

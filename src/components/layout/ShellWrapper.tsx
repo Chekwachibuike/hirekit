@@ -5,6 +5,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase'
 import Logo from '../Logo'
 import Header from './Header'
 import Sidebar from './Sidebar'
+import UndoToaster from '../UndoToaster'
 
 // ── Full-screen loader shown during the initial session check ──────────────
 function AppLoader({ stage }: { stage: string }) {
@@ -86,6 +87,7 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
   return (
     <>
       <Header />
+      <UndoToaster />
       {/* Painted in the header's colour, because this is what shows through
           the corners the two panels below round away. */}
       <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)', background: 'var(--c-chrome-bar)' }}>

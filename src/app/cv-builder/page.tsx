@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useDialog } from '@/lib/useDialog'
 import { useDropzone } from 'react-dropzone'
 import useSWR, { mutate as globalMutate } from 'swr'
 import {
@@ -10,6 +11,7 @@ import {
 import Link from 'next/link'
 import { fetcher } from '@/lib/fetcher'
 import { printElementAsPdf } from '@/lib/print-pdf'
+import { deleteWithUndo } from '@/lib/undo'
 import type { CvVersion, PersonalInfo } from '@/lib/supabase'
 import { takeCvTailorRequest, MIN_DESCRIPTION_CHARS, type CvTailorRequest } from '@/lib/cv-tailor-handoff'
 
@@ -263,7 +265,7 @@ function VersionItem({
           aria-label="Delete version"
           onClick={e => { e.stopPropagation(); onDelete() }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-dim)', padding: '2px 3px', borderRadius: 4, flexShrink: 0, marginLeft: 4 }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#E03255'}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--c-red)'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--c-text-dim)'}
         >
           {loading ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={11} />}
@@ -296,6 +298,7 @@ export default function CVBuilderPage() {
 
   // Generate-for-role modal
   const [genModal, setGenModal]   = useState(false)
+  const genRef = useRef<HTMLDivElement>(null)
   const [genForm, setGenForm]     = useState({ role: '', company: '', job_description: '' })
   const [sourcesUsed, setSourcesUsed] = useState<number | null>(null)
 
@@ -331,6 +334,7 @@ export default function CVBuilderPage() {
       setGenForm({ role: '', company: '', job_description: '' })
     }
   }
+  useDialog(genRef, closeGenModal, genModal)
 
   // ── Tailor request from Job Search ─────────────────────────
   // Runs once the CV and versions have loaded: the seeding effect above sets
@@ -407,13 +411,23 @@ export default function CVBuilderPage() {
 
   // ── Delete a version ───────────────────────────────────────
   async function deleteVersion(id: string) {
-    setDeletingId(id)
+    const version = versions.find(v => v.id === id)
     try {
-      await fetch(`/api/cv-versions?id=${id}`, { method: 'DELETE' })
-      setVersions(prev => prev.filter(v => v.id !== id))
-      globalMutate('/api/cv-versions', (cur: { data: typeof versions } | undefined) =>
-        cur ? { data: cur.data.filter(v => v.id !== id) } : cur, { revalidate: false })
-      if (activeId === id) setActiveId(null)
+      deleteWithUndo({
+        label: `Deleted CV version ${version ? `"${version.label}"` : ''}`.trim(),
+        remove: () => {
+          setVersions(prev => prev.filter(v => v.id !== id))
+          globalMutate('/api/cv-versions', (cur: { data: typeof versions } | undefined) =>
+            cur ? { data: cur.data.filter(v => v.id !== id) } : cur, { revalidate: false })
+          if (activeId === id) setActiveId(null)
+        },
+        restore: async () => {
+          const json = await (await fetch('/api/cv-versions')).json()
+          setVersions(json.data ?? [])
+          globalMutate('/api/cv-versions', json, { revalidate: false })
+        },
+        commit: () => fetch(`/api/cv-versions?id=${id}`, { method: 'DELETE', keepalive: true }),
+      })
     } finally {
       setDeletingId(null)
     }
@@ -628,7 +642,7 @@ export default function CVBuilderPage() {
               transition: 'all 0.15s',
             }}
           >
-            <input {...getInputProps()} />
+            <input {...getInputProps()} aria-label="Upload a CV (PDF)" />
             {uploading ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'var(--c-violet)' }}>
                 <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
@@ -677,6 +691,7 @@ export default function CVBuilderPage() {
             <input
               ref={labelRef}
               placeholder="e.g. Final v2"
+              aria-label="Name for the new CV version"
               style={{
                 flex: 1, padding: '6px 9px', borderRadius: 'var(--r-md)',
                 border: '1px solid var(--c-border)', background: 'var(--c-bg-3)',
@@ -690,7 +705,7 @@ export default function CVBuilderPage() {
               aria-label="Save version"
               style={{
                 padding: '6px 9px', borderRadius: 'var(--r-md)',
-                background: 'var(--c-violet)', border: 'none',
+                background: 'var(--c-violet-fill)', border: 'none',
                 color: '#fff', cursor: savingVersion ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center',
               }}
@@ -723,7 +738,7 @@ export default function CVBuilderPage() {
             <button onClick={() => setGenModal(true)} disabled={generating} style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 14px', borderRadius: 'var(--r-md)',
-              background: generating ? 'var(--c-bg-4)' : 'var(--c-violet)',
+              background: generating ? 'var(--c-bg-4)' : 'var(--c-violet-fill)',
               border: 'none', color: generating ? 'var(--c-text-dim)' : '#fff',
               fontSize: 12, fontWeight: 600, cursor: generating ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-body)', opacity: generating ? 0.7 : 1,
@@ -829,7 +844,7 @@ export default function CVBuilderPage() {
 
       {/* Sources banner */}
       {sourcesUsed !== null && (
-        <div style={{ position: 'fixed', bottom: 20, right: 20, background: 'var(--c-violet)', color: '#fff', borderRadius: 'var(--r-md)', padding: '9px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, zIndex: 100, boxShadow: '0 4px 20px rgba(124,92,252,0.35)', animation: 'fadeUp 0.3s ease' }}>
+        <div style={{ position: 'fixed', bottom: 20, right: 20, background: 'var(--c-violet-fill)', color: '#fff', borderRadius: 'var(--r-md)', padding: '9px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, zIndex: 100, boxShadow: '0 4px 20px rgba(124,92,252,0.35)', animation: 'fadeUp 0.3s ease' }}>
           <Sparkles size={13} />
           Curated from {sourcesUsed} CV source{sourcesUsed !== 1 ? 's' : ''}
           <button type="button" aria-label="Dismiss" onClick={() => setSourcesUsed(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.7, padding: 2 }}><X size={12} /></button>
@@ -840,7 +855,7 @@ export default function CVBuilderPage() {
       {genModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={closeGenModal}>
-          <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: 28, width: 520, maxHeight: '88vh', overflowY: 'auto' }}
+          <div ref={genRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Generate CV for role" style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: 28, width: 520, maxWidth: 'calc(100vw - 32px)', maxHeight: '88vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -854,7 +869,7 @@ export default function CVBuilderPage() {
             </div>
 
             {versions.length === 0 && (
-              <div style={{ background: 'var(--c-gold-dim)', border: '1px solid rgba(212,160,23,0.25)', borderRadius: 'var(--r-md)', padding: '9px 12px', marginTop: 12, fontSize: 12, color: 'var(--c-gold)' }}>
+              <div style={{ background: 'var(--c-gold-dim)', border: '1px solid rgba(212,160,23,0.25)', borderRadius: 'var(--r-md)', padding: '9px 12px', marginTop: 12, fontSize: 12, color: 'var(--c-gold-text)' }}>
                 No CVs uploaded yet — the AI will use your Personal Info profile. Upload past CVs for better curation.
               </div>
             )}
@@ -879,7 +894,7 @@ export default function CVBuilderPage() {
               <button type="button" onClick={closeGenModal} style={{ padding: '9px 18px', borderRadius: 'var(--r-md)', background: 'transparent', border: '1px solid var(--c-border-md)', color: 'var(--c-text-muted)', fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>Cancel</button>
               <button type="button" onClick={() => generate()} disabled={!genForm.role || !genForm.job_description} style={{
                 display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 'var(--r-md)',
-                background: genForm.role && genForm.job_description ? 'var(--c-violet)' : 'var(--c-bg-4)',
+                background: genForm.role && genForm.job_description ? 'var(--c-violet-fill)' : 'var(--c-bg-4)',
                 border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
                 cursor: genForm.role && genForm.job_description ? 'pointer' : 'default', fontFamily: 'var(--font-body)',
               }}>

@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { BellRing, Loader2, RefreshCw, Trash2, ExternalLink, Play, Mail, MailX, Pause, Check, ChevronDown, ChevronRight } from 'lucide-react'
+import { deleteWithUndo } from '@/lib/undo'
 
 // Saved searches and what they found. New matches come from the daily run
 // (and "Check now"); they stay marked new until the alert is opened here.
@@ -43,10 +44,14 @@ function ago(iso: string | null): string {
   return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
 }
 
-export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, onChanged, onRun, onClose }: {
+export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, onRemove, trackedStatus, onChanged, onRun, onClose }: {
   alerts: JobAlert[]
   emailConfigured: boolean
   sourceLabel: (s: string | null) => string | null
+  /** Takes an alert off screen while its delete waits for Undo. */
+  onRemove: (id: string) => void
+  /** Status label when the match is already on the Applications board. */
+  trackedStatus: (m: AlertMatch) => string | null
   onChanged: () => void
   onRun: (params: string) => void
   onClose: () => void
@@ -116,7 +121,7 @@ export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, o
                     {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                     <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
                     {a.newCount > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'var(--c-violet)', color: '#fff', flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'var(--c-violet-fill)', color: '#fff', flexShrink: 0 }}>
                         {a.newCount} new
                       </span>
                     )}
@@ -134,7 +139,12 @@ export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, o
                   <IconBtn label={a.active ? 'Pause' : 'Resume'} onClick={() => act(`active:${a.id}`, () => send('/api/job-alerts', 'PATCH', { id: a.id, active: !a.active }))}>
                     {a.active ? <Pause size={12} /> : <Check size={12} />}
                   </IconBtn>
-                  <IconBtn label="Delete alert" danger onClick={() => confirm(`Delete the alert "${a.name}"?`) && act(`del:${a.id}`, () => send(`/api/job-alerts?id=${a.id}`, 'DELETE'))}>
+                  <IconBtn label="Delete alert" danger onClick={() => { onRemove(a.id); deleteWithUndo({
+                    label: `Deleted the alert "${a.name}"`,
+                    remove: () => {},
+                    restore: () => onChanged(),
+                    commit: async () => { await fetch(`/api/job-alerts?id=${a.id}`, { method: 'DELETE', keepalive: true }); onChanged() },
+                  }) }}>
                     <Trash2 size={12} />
                   </IconBtn>
                 </div>
@@ -143,17 +153,21 @@ export default function JobAlertsPanel({ alerts, emailConfigured, sourceLabel, o
                   <div style={{ borderTop: '1px solid var(--c-border)', padding: '6px 12px 10px' }}>
                     {a.matches.length === 0 ? (
                       <p style={{ fontSize: 12, color: 'var(--c-text-dim)', padding: '6px 0' }}>Nothing found yet. New postings will appear here.</p>
-                    ) : a.matches.map(m => (
+                    ) : a.matches.map(m => {
+                      const onBoard = trackedStatus(m)
+                      return (
                       <a key={m.job_key} href={m.url} target="_blank" rel="noopener noreferrer"
                         style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 0', textDecoration: 'none', borderBottom: '1px solid var(--c-border)' }}>
-                        {!m.seen && <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--c-violet)', letterSpacing: '0.06em' }}>NEW</span>}
+                        {!m.seen && !onBoard && <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--c-violet)', letterSpacing: '0.06em' }}>NEW</span>}
+                        {onBoard && <span title="Already on your Applications board" style={{ fontSize: 9, fontWeight: 800, color: 'var(--c-teal)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{onBoard}</span>}
                         <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--c-text)' }}>{m.title}</span>
                         <span style={{ fontSize: 11.5, color: 'var(--c-text-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {[m.company, m.location, sourceLabel(m.source)].filter(Boolean).join(' · ')}
                         </span>
                         <ExternalLink size={11} color="var(--c-text-dim)" style={{ flexShrink: 0 }} />
                       </a>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

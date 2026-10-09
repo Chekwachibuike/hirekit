@@ -1,9 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePersistentState } from '@/lib/usePersistentState'
 import { requestCvTailor, MIN_DESCRIPTION_CHARS } from '@/lib/cv-tailor-handoff'
 import JobAlertsPanel, { type JobAlert } from '@/components/JobAlertsPanel'
+import { buildTrackedIndex, STATUS_LABELS, type TrackedApplication } from '@/lib/application-match'
 import useSWR from 'swr'
 import {
   Search, Loader2, MapPin, Building2, Clock, ExternalLink,
@@ -164,9 +165,12 @@ export default function JobSearchPage() {
   const [detail, setDetail]         = usePersistentState<JobDetail | null>('jobSearch.detail', null)
   const [detailLoading, setDetailLoading] = usePersistentState<string | null>('jobSearch.detailLoading', null, { session: false })
 
-  // Jobs already added to the Applications board (an array: a Set does not
-  // survive JSON in sessionStorage)
-  const [added, setAdded]   = usePersistentState<string[]>('jobSearch.added', [])
+  // What is already on the Applications board, read from the database — so
+  // a job tracked last week, added by hand, or found again on another board
+  // shows as tracked. Same SWR key as the Applications page, so a status
+  // changed there shows here without a refetch.
+  const { data: appsData, mutate: mutateApps } = useSWR<{ data: TrackedApplication[] }>('/api/applications', fetcher)
+  const tracked = useMemo(() => buildTrackedIndex(appsData?.data ?? []), [appsData])
   const [adding, setAdding] = usePersistentState<string | null>('jobSearch.adding', null, { session: false })
 
   // AI fit analysis — cached per job id so re-opening a job doesn't re-pay the AI call
@@ -357,6 +361,8 @@ export default function JobSearchPage() {
   }
 
   async function addToApplications(job: JobCard | JobDetail) {
+    // Never a second copy: the board may already have it from elsewhere.
+    if (tracked.find(job)) return
     setAdding(job.id)
     try {
       const res = await fetch('/api/applications', {
@@ -372,7 +378,10 @@ export default function JobSearchPage() {
           notes: `Found via HireKit Job Search on ${job.source ? SOURCE_LABELS[job.source] : 'LinkedIn'}`,
         }),
       })
-      if (res.ok) setAdded(s => (s.includes(job.id) ? s : [...s, job.id]))
+      if (res.ok) {
+        const json = await res.json()
+        mutateApps(cur => ({ data: [json.data, ...(cur?.data ?? [])] }), { revalidate: false })
+      }
     } finally {
       setAdding(null)
     }
@@ -402,6 +411,7 @@ export default function JobSearchPage() {
     ? matchedSkills(`${detail.title} ${detail.description ?? ''}`, skills)
     : []
   const fit = detail ? fitCache[detail.id] : undefined
+  const detailOnBoard = detail ? tracked.find(detail) : undefined
 
   return (
     <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -420,7 +430,7 @@ export default function JobSearchPage() {
           }}>
           <BellRing size={14} /> Alerts
           {newAlertCount > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--c-violet)', color: '#fff' }}>{newAlertCount}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: 'var(--c-violet-fill)', color: '#fff' }}>{newAlertCount}</span>
           )}
         </button>
       </div>
@@ -430,7 +440,9 @@ export default function JobSearchPage() {
           alerts={alerts}
           emailConfigured={!!alertData?.emailConfigured}
           sourceLabel={s => (s && s in SOURCE_LABELS ? SOURCE_LABELS[s as JobSourceId] : s)}
+          trackedStatus={m => { const a = tracked.find({ url: m.url, company: m.company, title: m.title }); return a ? STATUS_LABELS[a.status] : null }}
           onChanged={() => mutateAlerts()}
+          onRemove={id => mutateAlerts(cur => cur ? { ...cur, data: cur.data.filter(a => a.id !== id) } : cur, { revalidate: false })}
           onRun={params => { setAlertsOpen(false); runAlert(params) }}
           onClose={() => setAlertsOpen(false)}
         />
@@ -477,7 +489,7 @@ export default function JobSearchPage() {
           style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px',
             borderRadius: 'var(--r-md)',
-            background: !canSearch ? 'var(--c-bg-4)' : 'var(--c-coral)',
+            background: !canSearch ? 'var(--c-bg-4)' : 'var(--c-coral-fill)',
             border: 'none', color: !canSearch ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600,
             cursor: !canSearch ? 'default' : 'pointer',
             fontFamily: 'var(--font-body)',
@@ -581,7 +593,7 @@ export default function JobSearchPage() {
             >
               <span style={{
                 width: 5, height: 5, borderRadius: '50%',
-                background: o.ok ? 'var(--c-teal)' : 'var(--c-red)',
+                background: o.ok ? 'var(--c-teal-fill)' : 'var(--c-red)',
               }} />
               {SOURCE_LABELS[o.source]} {o.ok ? o.count : 'down'}
             </span>
@@ -648,7 +660,7 @@ export default function JobSearchPage() {
               {results.map(job => {
                 const matches = matchedSkills(job.title, skills)
                 const isActive = detail?.id === job.id
-                const isAdded = added.includes(job.id)
+                const onBoard = tracked.find(job)
                 return (
                   <div key={job.id} onClick={() => openDetail(job)} style={{
                     background: isActive ? 'var(--c-violet-dim)' : 'var(--c-bg-2)',
@@ -681,20 +693,21 @@ export default function JobSearchPage() {
                         Tailor CV
                       </button>
                       <button
-                        aria-label={isAdded ? 'Added to applications' : 'Add to applications'}
-                        onClick={e => { e.stopPropagation(); if (!isAdded) addToApplications(job) }}
-                        disabled={isAdded || adding === job.id}
+                        aria-label={onBoard ? `On your board: ${STATUS_LABELS[onBoard.status]}. Open Applications` : 'Add to applications'}
+                        title={onBoard ? `Already on your Applications board as ${onBoard.role} at ${onBoard.company} (${STATUS_LABELS[onBoard.status]}). Click to open it.` : 'Add to your Applications board'}
+                        onClick={e => { e.stopPropagation(); if (onBoard) router.push('/applications'); else addToApplications(job) }}
+                        disabled={adding === job.id}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 5,
                           padding: '5px 12px', borderRadius: 999,
-                          background: isAdded ? 'rgba(0,168,133,0.1)' : 'var(--c-bg-4)',
-                          border: `1px solid ${isAdded ? 'rgba(0,168,133,0.25)' : 'var(--c-border)'}`,
-                          color: isAdded ? 'var(--c-teal)' : 'var(--c-text-muted)',
-                          fontSize: 11, fontWeight: 600, cursor: isAdded ? 'default' : 'pointer',
+                          background: onBoard ? 'rgba(0,168,133,0.1)' : 'var(--c-bg-4)',
+                          border: `1px solid ${onBoard ? 'rgba(0,168,133,0.25)' : 'var(--c-border)'}`,
+                          color: onBoard ? 'var(--c-teal)' : 'var(--c-text-muted)',
+                          fontSize: 11, fontWeight: 600, cursor: 'pointer',
                           fontFamily: 'var(--font-body)',
                         }}>
-                        {adding === job.id ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : isAdded ? <Check size={11} /> : <Plus size={11} />}
-                        {isAdded ? 'Added' : 'Track'}
+                        {adding === job.id ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : onBoard ? <Check size={11} /> : <Plus size={11} />}
+                        {onBoard ? STATUS_LABELS[onBoard.status] : 'Track'}
                       </button>
                       </div>
                     </div>
@@ -850,12 +863,12 @@ export default function JobSearchPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                   <span style={{
                     fontSize: 22, fontWeight: 800,
-                    color: fit.score >= 70 ? 'var(--c-teal)' : fit.score >= 45 ? 'var(--c-gold)' : '#E03255',
+                    color: fit.score >= 70 ? 'var(--c-teal)' : fit.score >= 45 ? 'var(--c-gold)' : 'var(--c-red)',
                   }}>{fit.score}%</span>
                   <div style={{ flex: 1, height: 6, background: 'var(--c-bg-4)', borderRadius: 999, overflow: 'hidden' }}>
                     <div style={{
                       height: '100%', borderRadius: 999, width: `${fit.score}%`,
-                      background: fit.score >= 70 ? 'var(--c-teal)' : fit.score >= 45 ? 'var(--c-gold)' : '#E03255',
+                      background: fit.score >= 70 ? 'var(--c-teal-fill)' : fit.score >= 45 ? 'var(--c-gold)' : 'var(--c-red)',
                       transition: 'width 0.6s ease',
                     }} />
                   </div>
@@ -874,10 +887,10 @@ export default function JobSearchPage() {
                 )}
                 {fit.gaps.length > 0 && (
                   <div style={{ marginBottom: 10 }}>
-                    <p style={{ fontSize: 10, fontWeight: 700, color: '#E03255', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>Gaps</p>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--c-red)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>Gaps</p>
                     {fit.gaps.map((g, i) => (
                       <p key={i} style={{ fontSize: 12, color: 'var(--c-text-muted)', lineHeight: 1.55, marginBottom: 4, paddingLeft: 12, position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: 0, color: '#E03255' }}>–</span>{g}
+                        <span style={{ position: 'absolute', left: 0, color: 'var(--c-red)' }}>–</span>{g}
                       </p>
                     ))}
                   </div>
@@ -902,7 +915,7 @@ export default function JobSearchPage() {
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center',
                 padding: '10px 14px', borderRadius: 'var(--r-md)', marginBottom: 8,
-                background: 'var(--c-coral)', border: 'none', color: '#fff',
+                background: 'var(--c-coral-fill)', border: 'none', color: '#fff',
                 fontSize: 12, fontWeight: 700, cursor: tailoring ? 'default' : 'pointer',
                 fontFamily: 'var(--font-body)', opacity: tailoring && tailoring !== detail.id ? 0.6 : 1,
               }}>
@@ -911,20 +924,21 @@ export default function JobSearchPage() {
             </button>
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               <button
-                onClick={() => !added.includes(detail.id) && addToApplications(detail)}
-                disabled={added.includes(detail.id) || adding === detail.id}
+                onClick={() => (detailOnBoard ? router.push('/applications') : addToApplications(detail))}
+                disabled={adding === detail.id}
+                title={detailOnBoard ? `Already on your board (${STATUS_LABELS[detailOnBoard.status]}). Click to open Applications.` : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center',
                   padding: '9px 14px', borderRadius: 'var(--r-md)',
-                  background: added.includes(detail.id) ? 'rgba(0,168,133,0.1)' : 'var(--c-bg-2)',
-                  border: added.includes(detail.id) ? '1px solid rgba(0,168,133,0.25)' : '1px solid var(--c-border-md)',
-                  color: added.includes(detail.id) ? 'var(--c-teal)' : 'var(--c-text)',
+                  background: detailOnBoard ? 'rgba(0,168,133,0.1)' : 'var(--c-bg-2)',
+                  border: detailOnBoard ? '1px solid rgba(0,168,133,0.25)' : '1px solid var(--c-border-md)',
+                  color: detailOnBoard ? 'var(--c-teal)' : 'var(--c-text)',
                   fontSize: 12, fontWeight: 600,
-                  cursor: added.includes(detail.id) ? 'default' : 'pointer',
+                  cursor: 'pointer',
                   fontFamily: 'var(--font-body)',
                 }}>
-                {adding === detail.id ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : added.includes(detail.id) ? <Check size={12} /> : <Plus size={12} />}
-                {added.includes(detail.id) ? 'On your board' : 'Track application'}
+                {adding === detail.id ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : detailOnBoard ? <Check size={12} /> : <Plus size={12} />}
+                {detailOnBoard ? `On your board · ${STATUS_LABELS[detailOnBoard.status]}` : 'Track application'}
               </button>
               <a href={detail.url} target="_blank" rel="noopener noreferrer"
                 style={{

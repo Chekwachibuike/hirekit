@@ -273,7 +273,7 @@ export default function SkillsPage() {
                   </div>
                   <span style={{
                     fontSize: 15, fontWeight: 800,
-                    color: rd.percent >= 75 ? 'var(--c-teal)' : rd.percent >= 45 ? 'var(--c-gold)' : '#E03255',
+                    color: rd.percent >= 75 ? 'var(--c-teal)' : rd.percent >= 45 ? 'var(--c-gold-text)' : 'var(--c-red)',
                   }}>{rd.percent}%</span>
                 </button>
               )
@@ -284,7 +284,7 @@ export default function SkillsPage() {
           <div style={{ height: 8, background: 'var(--c-bg-4)', borderRadius: 999, overflow: 'hidden', marginBottom: 6 }}>
             <div style={{
               height: '100%', borderRadius: 999, width: `${readiness.percent}%`,
-              background: readiness.percent >= 75 ? 'var(--c-teal)' : readiness.percent >= 45 ? 'var(--c-gold)' : '#E03255',
+              background: readiness.percent >= 75 ? 'var(--c-teal-fill)' : readiness.percent >= 45 ? 'var(--c-gold)' : 'var(--c-red)',
               transition: 'width 0.5s ease',
             }} />
           </div>
@@ -318,7 +318,7 @@ export default function SkillsPage() {
               <Link href={prepHref} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 padding: '10px 14px', borderRadius: 'var(--r-md)',
-                background: 'var(--c-violet)', color: '#fff',
+                background: 'var(--c-violet-fill)', color: '#fff',
                 fontSize: 12, fontWeight: 600, textDecoration: 'none',
                 fontFamily: 'var(--font-body)',
               }}>

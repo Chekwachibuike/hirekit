@@ -23,7 +23,7 @@ const SIZES: Record<Size, React.CSSProperties> = {
 }
 
 const VARIANTS: Record<Variant, React.CSSProperties> = {
-  primary: { background: 'var(--c-violet)', color: '#fff', boxShadow: 'var(--shadow-accent)' },
+  primary: { background: 'var(--c-violet-fill)', color: '#fff', boxShadow: 'var(--shadow-accent)' },
   ghost:   { background: 'transparent', color: 'var(--c-text-muted)', borderColor: 'var(--c-border-md)' },
   subtle:  { background: 'var(--c-bg-4)', color: 'var(--c-text)' },
   danger:  { background: 'var(--c-red-dim)', color: 'var(--c-red)' },

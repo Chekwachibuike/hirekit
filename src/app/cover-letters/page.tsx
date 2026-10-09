@@ -1,6 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { useDialog } from '@/lib/useDialog'
 import useSWR from 'swr'
+import { deleteWithUndo } from '@/lib/undo'
 import { Plus, X, Mail, Loader2, Copy, Check, Trash2, FileText, Send, LayoutTemplate, Wand2, Download, Printer } from 'lucide-react'
 import { fetcher } from '@/lib/fetcher'
 import { printElementAsPdf } from '@/lib/print-pdf'
@@ -45,6 +47,10 @@ export default function CoverLettersPage() {
 
   // Email send state
   const [sendModal, setSendModal]     = useState(false)
+  const genRef = useRef<HTMLDivElement>(null)
+  const sendRef = useRef<HTMLDivElement>(null)
+  useDialog(genRef, () => !generating && setModal(false), modal)
+  useDialog(sendRef, () => !sending && setSendModal(false), sendModal)
   const [emailTo, setEmailTo]         = useState('')
   const [sending, setSending]         = useState(false)
   const [sendError, setSendError]     = useState<string | null>(null)
@@ -114,10 +120,15 @@ export default function CoverLettersPage() {
     pdf.save(`${safeName}.pdf`)
   }
 
-  async function deleteLetter(id: string) {
-    mutate(cur => ({ data: (cur?.data ?? []).filter(l => l.id !== id) }), { revalidate: false })
+  function deleteLetter(id: string) {
+    const letter = (data?.data ?? []).find(l => l.id === id)
     if (viewing?.id === id) setViewing(null)
-    await fetch(`/api/cover-letters?id=${id}`, { method: 'DELETE' })
+    deleteWithUndo({
+      label: `Deleted ${letter ? `"${letter.title}"` : 'cover letter'}`,
+      remove: () => mutate(cur => ({ data: (cur?.data ?? []).filter(l => l.id !== id) }), { revalidate: false }),
+      restore: () => mutate(),
+      commit: () => fetch(`/api/cover-letters?id=${id}`, { method: 'DELETE', keepalive: true }),
+    })
   }
 
   function openSend() {
@@ -161,7 +172,7 @@ export default function CoverLettersPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Cover Letters</h1>
           <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>AI-generated letters — free-form or from your own template</p>
         </div>
-        <button onClick={() => setModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 'var(--r-md)', background: 'var(--c-coral)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+        <button onClick={() => setModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 'var(--r-md)', background: 'var(--c-coral-fill)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
           <Plus size={15} /> Generate Letter
         </button>
       </div>
@@ -220,7 +231,7 @@ export default function CoverLettersPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => copyText(viewing.content)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--r-md)', background: copied ? 'var(--c-teal)' : 'var(--c-bg-3)', border: '1px solid var(--c-border)', color: copied ? '#fff' : 'var(--c-text-muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'var(--font-body)' }}>
+                  <button onClick={() => copyText(viewing.content)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--r-md)', background: copied ? 'var(--c-teal-fill)' : 'var(--c-bg-3)', border: '1px solid var(--c-border)', color: copied ? '#fff' : 'var(--c-text-muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'var(--font-body)' }}>
                     {copied ? <Check size={13} /> : <Copy size={13} />}
                     {copied ? 'Copied!' : 'Copy'}
                   </button>
@@ -230,7 +241,7 @@ export default function CoverLettersPage() {
                   <button onClick={() => printElementAsPdf('[data-letter-preview]', viewing.title)} title="Selectable-text PDF that ATS systems can read" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--r-md)', background: 'var(--c-bg-3)', border: '1px solid var(--c-border)', color: 'var(--c-text-muted)', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
                     <Printer size={13} /> ATS PDF
                   </button>
-                  <button onClick={openSend} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--r-md)', background: 'var(--c-violet)', border: '1px solid transparent', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+                  <button onClick={openSend} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 'var(--r-md)', background: 'var(--c-violet-fill)', border: '1px solid transparent', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
                     <Send size={13} /> Send via Email
                   </button>
                 </div>
@@ -253,7 +264,7 @@ export default function CoverLettersPage() {
       {modal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => !generating && setModal(false)}>
-          <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '28px', width: 580, maxHeight: '90vh', overflowY: 'auto' }}
+          <div ref={genRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Generate cover letter" style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '28px', width: 580, maxWidth: 'calc(100vw - 32px)', maxHeight: '90vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -357,7 +368,7 @@ export default function CoverLettersPage() {
               <button onClick={generate} disabled={!canGenerate} style={{
                 display: 'flex', alignItems: 'center', gap: 7,
                 padding: '9px 20px', borderRadius: 'var(--r-md)',
-                background: canGenerate ? 'var(--c-coral)' : 'var(--c-bg-4)',
+                background: canGenerate ? 'var(--c-coral-fill)' : 'var(--c-bg-4)',
                 border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
                 cursor: canGenerate ? 'pointer' : 'default',
                 fontFamily: 'var(--font-body)', opacity: generating ? 0.7 : 1,
@@ -374,7 +385,7 @@ export default function CoverLettersPage() {
       {sendModal && viewing && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--c-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => !sending && setSendModal(false)}>
-          <div style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '28px', width: 440 }}
+          <div ref={sendRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Send cover letter by email" style={{ background: 'var(--c-bg-3)', border: '1px solid var(--c-border-md)', borderRadius: 'var(--r-xl)', padding: '28px', width: 440, maxWidth: 'calc(100vw - 32px)' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--c-text)' }}>Send via Email</h2>
@@ -388,7 +399,7 @@ export default function CoverLettersPage() {
             {sendSuccess && <div style={{ background: 'rgba(0,168,133,0.08)', border: '1px solid rgba(0,168,133,0.3)', color: 'var(--c-teal)', borderRadius: 'var(--r-md)', padding: '10px 14px', marginTop: 14, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><Check size={14} /> Email sent!</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
               <button onClick={() => setSendModal(false)} disabled={sending} style={{ padding: '9px 18px', borderRadius: 'var(--r-md)', background: 'transparent', border: '1px solid var(--c-border-md)', color: 'var(--c-text-muted)', fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>Cancel</button>
-              <button onClick={sendEmail} disabled={sending || !emailTo || sendSuccess} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 'var(--r-md)', background: sending || !emailTo || sendSuccess ? 'var(--c-bg-4)' : 'var(--c-violet)', border: 'none', color: sending || !emailTo || sendSuccess ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600, cursor: sending || !emailTo || sendSuccess ? 'default' : 'pointer', fontFamily: 'var(--font-body)', opacity: sending ? 0.7 : 1 }}>
+              <button onClick={sendEmail} disabled={sending || !emailTo || sendSuccess} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 'var(--r-md)', background: sending || !emailTo || sendSuccess ? 'var(--c-bg-4)' : 'var(--c-violet-fill)', border: 'none', color: sending || !emailTo || sendSuccess ? 'var(--c-text-dim)' : '#fff', fontSize: 13, fontWeight: 600, cursor: sending || !emailTo || sendSuccess ? 'default' : 'pointer', fontFamily: 'var(--font-body)', opacity: sending ? 0.7 : 1 }}>
                 {sending ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
                 {sending ? 'Sending…' : 'Send'}
               </button>

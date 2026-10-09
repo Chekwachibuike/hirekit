@@ -122,7 +122,7 @@ export default function NotificationBell() {
           <span style={{
             position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16,
             padding: '0 4px', borderRadius: 999,
-            background: urgent ? 'var(--c-red)' : 'var(--c-coral)',
+            background: urgent ? 'var(--c-red)' : 'var(--c-coral-fill)',
             border: '2px solid var(--c-chrome)',
             color: '#fff', fontSize: 9.5, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',

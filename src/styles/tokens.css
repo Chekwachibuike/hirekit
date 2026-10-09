@@ -32,8 +32,8 @@
   --c-chrome-hover:  rgba(17,24,39,0.055);
   --c-chrome-active: rgba(17,24,39,0.085);
   --c-chrome-text:   #101828;
-  --c-chrome-muted:  rgba(16,24,40,0.62);
-  --c-chrome-dim:    rgba(16,24,40,0.40);
+  --c-chrome-muted:  rgba(16,24,40,0.70);
+  --c-chrome-dim:    rgba(16,24,40,0.62);
   --c-chrome-border: rgba(17,24,39,0.10);
 
   /* ── Borders ───────────────────────────────────────── */
@@ -42,27 +42,44 @@
   --c-border-hot:  rgba(124,92,252,0.42);
 
   /* ── Primary Accent — Violet ────────────────────────── */
-  --c-violet:      #7C5CFC;
+  /* Accents are a shade deeper than they were (#7C5CFC, #00A885,
+     #F4633A, #E03255): at the old values neither text in the accent nor
+     white text on it reached 4.5:1. */
+  --c-violet:      #6448F0;
   --c-violet-dim:  rgba(124,92,252,0.10);
   --c-violet-glow: rgba(124,92,252,0.16);
   --c-violet-hot:  #9678FF;
   --c-violet-deep: #5C3EE8;
 
   /* ── Secondary — Coral ──────────────────────────────── */
-  --c-coral:       #F4633A;
+  --c-coral:       #C8441D;
+  --c-coral-text:  #B5390F;
   --c-coral-dim:   rgba(244,99,58,0.11);
 
   /* ── Tertiary — Teal ────────────────────────────────── */
-  --c-teal:        #00A885;
+  --c-teal:        #007D63;
   --c-teal-dim:    rgba(0,168,133,0.11);
 
   /* ── Warm — Gold ────────────────────────────────────── */
   --c-gold:        #D4A017;
+  /* Gold stays bright as a fill (with --c-on-gold text); as text it needs
+     this darker shade to be readable. */
+  --c-gold-text:   #7D5D00;
   --c-gold-dim:    rgba(212,160,23,0.12);
 
   /* ── Status ─────────────────────────────────────────── */
   --c-green:       #1FAF6E;
-  --c-red:         #E03255;
+  --c-red:         #C82347;
+  /* Status text sits on a 14% tint of its own colour, which needs a
+     deeper shade than text on the page. */
+  --c-teal-text:   #006B55;
+  --c-green-text:  #0F6E42;
+  --c-red-text:    #B81F40;
+  /* Backgrounds behind white text. Same as the accent here; dark mode
+     lightens the accents for text, so it needs its own deeper fills. */
+  --c-violet-fill: #6448F0;
+  --c-coral-fill:  #C8441D;
+  --c-teal-fill:   #007D63;
   --c-amber:       #E09020;
   --c-red-dim:     rgba(224,50,85,0.11);
   /* Error banners. Pages used fixed light-pink hexes here, which glowed
@@ -75,8 +92,10 @@
 
   /* ── Text ───────────────────────────────────────────── */
   --c-text:        #101828;
-  --c-text-muted:  rgba(16,24,40,0.58);
-  --c-text-dim:    rgba(16,24,40,0.36);
+  /* Both at or above 4.5:1 on every surface (0.58 / 0.36 measured 4.2
+     and 2.3), with muted still a step stronger than dim. */
+  --c-text-muted:  rgba(16,24,40,0.70);
+  --c-text-dim:    rgba(16,24,40,0.62);
   --c-on-accent:   #FFFFFF;
 
   /* ── Elevation ──────────────────────────────────────── */
@@ -130,7 +149,7 @@
   --c-chrome-active: rgba(255,255,255,0.13);
   --c-chrome-text:   rgba(255,255,255,0.95);
   --c-chrome-muted:  rgba(255,255,255,0.60);
-  --c-chrome-dim:    rgba(255,255,255,0.38);
+  --c-chrome-dim:    rgba(255,255,255,0.55);
   --c-chrome-border: rgba(255,255,255,0.10);
 
   --c-border:      rgba(255,255,255,0.08);
@@ -144,12 +163,20 @@
   --c-violet-deep: #7C5CFC;
 
   --c-coral:       #FF7A54;
+  --c-coral-text:  #FF7A54;
   --c-coral-dim:   rgba(255,122,84,0.16);
 
   --c-teal:        #22C79E;
   --c-teal-dim:    rgba(34,199,158,0.16);
 
   --c-gold:        #E8B93A;
+  --c-gold-text:   #E8B93A;
+  --c-teal-text:   #22C79E;
+  --c-green-text:  #4ADE80;
+  --c-red-text:    #FF8FA3;
+  --c-violet-fill: #6448F0;
+  --c-coral-fill:  #C8441D;
+  --c-teal-fill:   #007D63;
   --c-gold-dim:    rgba(232,185,58,0.16);
 
   --c-green:       #3ED08A;
@@ -163,7 +190,7 @@
 
   --c-text:        #ECEDF1;
   --c-text-muted:  rgba(236,237,241,0.60);
-  --c-text-dim:    rgba(236,237,241,0.36);
+  --c-text-dim:    rgba(236,237,241,0.54);
   --c-on-accent:   #14151A;
 
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.40);
@@ -273,3 +300,22 @@ main [style*="position: fixed"] { zoom: calc(1 / var(--content-zoom)); }
    to the system font. :where() keeps this at zero specificity, so any
    inline fontFamily still wins. */
 :where(button, input, select, textarea) { font-family: inherit; }
+
+/* ── Press feedback ─────────────────────────────────────
+   Respond on press, not on release: a button visibly gives the instant it
+   is pressed. Instant (no transition) on the way in. */
+:where(button):not(:disabled):active { transform: scale(0.97); }
+
+/* One disabled cursor everywhere (pages mixed "default" and "not-allowed"). */
+button:disabled { cursor: not-allowed !important; }
+
+/* ── Reduced transparency ───────────────────────────────
+   Blurred scrims become plain dimming for people who ask for less
+   transparency. */
+@media (prefers-reduced-transparency: reduce) {
+  [style*="backdrop-filter"] { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
+
+/* ── Dashboard split ──────────────────────────────────── */
+.dash-split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; }
+@media (max-width: 1100px) { .dash-split { grid-template-columns: minmax(0, 1fr); } }

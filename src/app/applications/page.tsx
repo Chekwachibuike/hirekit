@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef } from 'react'
+import { useDialog } from '@/lib/useDialog'
 import useSWR from 'swr'
+import { deleteWithUndo } from '@/lib/undo'
 import {
   Plus, X, ExternalLink, MoreHorizontal, Calendar,
   MapPin, DollarSign, Search, Briefcase, Edit3, Trash2, Check, Loader2
@@ -40,6 +42,8 @@ export default function ApplicationsPage() {
   const [dragging, setDragging] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<AppStatus | null>(null)
   const [modal, setModal]       = useState<'add' | 'edit' | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  useDialog(modalRef, () => setModal(null), !!modal)
   const [editing, setEditing]   = useState<JobApplication | null>(null)
   const [form, setForm]         = useState(emptyApp())
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
@@ -137,10 +141,16 @@ export default function ApplicationsPage() {
     }
   }
 
-  async function deleteApp(id: string) {
+  function deleteApp(id: string) {
     setMenuOpen(null)
-    mutate(cur => ({ data: (cur?.data ?? []).filter(a => a.id !== id) }), { revalidate: false })
-    await fetch(`/api/applications?id=${id}`, { method: 'DELETE' })
+    const app = apps.find(a => a.id === id)
+    deleteWithUndo({
+      label: `Deleted ${app ? `${app.role} at ${app.company}` : 'application'}`,
+      remove: () => mutate(cur => ({ data: (cur?.data ?? []).filter(a => a.id !== id) }), { revalidate: false }),
+      // Nothing has been deleted yet, so re-reading the board brings it back.
+      restore: () => mutate(),
+      commit: () => fetch(`/api/applications?id=${id}`, { method: 'DELETE', keepalive: true }),
+    })
   }
 
   function moveApp(id: string, status: AppStatus) {
@@ -169,7 +179,7 @@ export default function ApplicationsPage() {
             </h1>
             <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: 'var(--c-text-muted)' }}>
               <span><strong style={{ color: 'var(--c-violet)', fontFamily: 'var(--font-mono)' }}>{totalApps}</strong> total</span>
-              <span><strong style={{ color: 'var(--c-gold)', fontFamily: 'var(--font-mono)' }}>{interviews}</strong> interviews</span>
+              <span><strong style={{ color: 'var(--c-gold-text)', fontFamily: 'var(--font-mono)' }}>{interviews}</strong> interviews</span>
               <span><strong style={{ color: 'var(--c-teal)', fontFamily: 'var(--font-mono)' }}>{offers}</strong> offers</span>
             </div>
           </div>
@@ -337,7 +347,7 @@ export default function ApplicationsPage() {
           padding: 20,
           animation: 'fadeIn 0.15s ease',
         }} onClick={() => setModal(null)}>
-          <div style={{
+          <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={modal === 'edit' ? 'Edit application' : 'Add application'} style={{
             background: 'var(--c-surface)',
             border: '1px solid var(--c-border)',
             borderRadius: 'var(--r-2xl)',
@@ -489,7 +499,7 @@ function KanbanCard({ app, isDragging, menuOpen, onMenuToggle, onEdit, onDelete,
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button aria-label="Card options" onClick={e => { e.stopPropagation(); onMenuToggle() }} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--c-text-dim)', padding: 3, borderRadius: 5,
+            color: 'var(--c-text-dim)', padding: 7, borderRadius: 6,
             display: 'flex', transition: 'color 0.15s, background 0.15s',
           }}
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--c-text)'; e.currentTarget.style.background = 'var(--c-bg-4)' }}

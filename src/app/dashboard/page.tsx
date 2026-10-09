@@ -153,9 +153,9 @@ export default function DashboardPage() {
 
   const STAT_CARDS = [
     { label: 'Total Applied', value: stats.total,      icon: Briefcase,  color: 'var(--c-violet)' },
-    { label: 'Interviews',    value: stats.interviews, icon: TrendingUp, color: 'var(--c-gold)'   },
+    { label: 'Interviews',    value: stats.interviews, icon: TrendingUp, color: 'var(--c-gold-text)'   },
     { label: 'Offers',        value: stats.offers,     icon: Trophy,     color: 'var(--c-teal)'   },
-    { label: 'Cover Letters', value: stats.letters,    icon: FileText,   color: 'var(--c-coral)'  },
+    { label: 'Cover Letters', value: stats.letters,    icon: FileText,   color: 'var(--c-coral-text)'  },
   ]
 
   return (
@@ -167,7 +167,7 @@ export default function DashboardPage() {
           HireKit
           {!loading && authed && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--c-teal)', fontWeight: 600, letterSpacing: '0.08em' }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--c-teal)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--c-teal-fill)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
               LIVE
             </span>
           )}
@@ -183,7 +183,7 @@ export default function DashboardPage() {
             ? <>You have{' '}
                 <strong style={{ color: 'var(--c-teal)' }}>{stats.offers} offer{stats.offers !== 1 ? 's' : ''}</strong>
                 {' '}and{' '}
-                <strong style={{ color: 'var(--c-gold)' }}>{stats.interviews} interview{stats.interviews !== 1 ? 's' : ''}</strong>
+                <strong style={{ color: 'var(--c-gold-text)' }}>{stats.interviews} interview{stats.interviews !== 1 ? 's' : ''}</strong>
                 {' '}in progress.
               </>
             : <>Sign in to see your real-time job search data.</>
@@ -192,14 +192,17 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20 }}>
+      {/* auto-fit: four across on a laptop, two or one when the window is narrow */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 20 }}>
         {STAT_CARDS.map((s, i) => (
           <StatCard key={s.label} {...s} loading={loading} delay={i * 0.05} />
         ))}
       </div>
 
       {/* Main grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18 }}>
+      {/* Two columns, stacking below ~1100px (see .dash-split in tokens.css):
+          a fixed 320px side column overflowed narrow windows by 180px. */}
+      <div className="dash-split">
 
         {/* Left column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -278,8 +281,8 @@ export default function DashboardPage() {
               {[
                 { href: '/cv-builder',    label: 'Build ATS CV',       color: 'var(--c-violet)', icon: FileText  },
                 { href: '/applications',  label: 'Add Application',    color: 'var(--c-teal)',   icon: Plus      },
-                { href: '/cover-letters', label: 'Write Cover Letter', color: 'var(--c-coral)',  icon: Mail      },
-                { href: '/calendar',      label: 'Schedule Event',     color: 'var(--c-gold)',   icon: Clock     },
+                { href: '/cover-letters', label: 'Write Cover Letter', color: 'var(--c-coral-text)',  icon: Mail      },
+                { href: '/calendar',      label: 'Schedule Event',     color: 'var(--c-gold-text)',   icon: Clock     },
               ].map(({ href, label, color, icon: Icon }) => (
                 <Link key={href} href={href} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', borderRadius: 'var(--r-md)', background: 'var(--c-surface-2)', border: '1px solid var(--c-border)', textDecoration: 'none', color: 'var(--c-text)', fontSize: 13, fontWeight: 500, transition: 'all 0.15s' }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = `color-mix(in srgb, ${color} 45%, transparent)`; e.currentTarget.style.background = 'var(--c-surface-hover)' }}

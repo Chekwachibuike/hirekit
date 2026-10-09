@@ -71,7 +71,7 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
       <span style={{
         position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
         width: 3, height: active ? 18 : 0, borderRadius: 999,
-        background: 'var(--c-violet)', transition: 'height 0.2s ease',
+        background: 'var(--c-violet-fill)', transition: 'height 0.2s ease',
       }} />
       <Icon size={16} strokeWidth={active ? 2.4 : 2} />
       {label}

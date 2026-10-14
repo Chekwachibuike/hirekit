@@ -474,7 +474,7 @@ function EmptyState() {
       <BrainCircuit size={48} style={{ opacity: 0.2 }} />
       <div>
         <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text-muted)', marginBottom: 6 }}>Ready when you are</p>
-        <p style={{ fontSize: 13, lineHeight: 1.6, maxWidth: 360 }}>Enter the role you're interviewing for above and click Generate. You'll get 15 MCQ questions, 5 written prompts with AI scoring, and 3 LeetCode problems — all tailored to that role.</p>
+        <p style={{ fontSize: 13, lineHeight: 1.6, maxWidth: 360 }}>Enter the role you're interviewing for above and click Generate. You'll get 15 MCQ questions, 5 written prompts with AI scoring, and 3 practice problems (LeetCode for software roles) — all tailored to that role.</p>
       </div>
     </div>
   )
@@ -488,6 +488,10 @@ export default function InterviewPrepPage() {
   // Kept across page changes (see usePersistentState): the generated set,
   // every answer and rating. Only in-flight flags are memory-only.
   const [role, setRole]           = usePersistentState('interviewPrep.role', '')
+  // The application this practice is for, if one was picked. Optional:
+  // any typed role works without one.
+  const [appId, setAppId]         = usePersistentState('interviewPrep.appId', '')
+  const pickedApp = apps.find(a => a.id === appId)
   const [generating, setGenerating] = usePersistentState('interviewPrep.generating', false, { session: false })
   const [error, setError]         = usePersistentState<string | null>('interviewPrep.error', null)
   const [questions, setQuestions] = usePersistentState<Questions | null>('interviewPrep.questions', null)
@@ -515,6 +519,7 @@ export default function InterviewPrepPage() {
     const preset = new URLSearchParams(window.location.search).get('role')
     if (preset) {
       setRole(preset)
+      setAppId('')
       window.history.replaceState({}, '', '/interview-prep')
     }
   }, [])
@@ -529,7 +534,7 @@ export default function InterviewPrepPage() {
       const res  = await fetch('/api/ai/interview-prep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: role.trim() }),
+        body: JSON.stringify({ role: role.trim(), company: pickedApp && pickedApp.role === role ? pickedApp.company : undefined }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Generation failed')
@@ -594,7 +599,7 @@ export default function InterviewPrepPage() {
       {/* Header */}
       <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Interview Prep</h1>
-        <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>15 MCQ questions · 5 written prompts with AI scoring · 3 LeetCode problems — tailored to any role</p>
+        <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>15 MCQ questions · 5 written prompts with AI scoring · 3 practice problems — for any role, no application needed</p>
       </div>
 
       {/* Progress — streak, this month's scores, and what to study next.
@@ -614,20 +619,28 @@ export default function InterviewPrepPage() {
               <input
                 id="ip-role"
                 value={role}
-                onChange={e => setRole(e.target.value)}
+                onChange={e => {
+                  setRole(e.target.value)
+                  // Editing the role away from the picked application unlinks it.
+                  if (pickedApp && e.target.value !== pickedApp.role) setAppId('')
+                }}
                 onKeyDown={e => e.key === 'Enter' && generate()}
-                placeholder="e.g. Senior Fullstack Engineer, Backend Developer, DevOps…"
+                placeholder="Type any role, e.g. Graduate Electrical Engineer, Backend Developer…"
                 style={{ flex: 1, padding: '9px 14px', background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', color: 'var(--c-text)', fontSize: 13, outline: 'none', fontFamily: 'var(--font-body)' }}
               />
               {apps.length > 0 && (
                 <select
-                  value=""
-                  onChange={e => setRole(e.target.value)}
-                  aria-label="Load role from applications"
-                  style={{ padding: '9px 12px', background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', color: 'var(--c-text-muted)', fontSize: 12, outline: 'none', fontFamily: 'var(--font-body)', cursor: 'pointer' }}
+                  value={pickedApp ? pickedApp.id : ''}
+                  onChange={e => {
+                    const a = apps.find(x => x.id === e.target.value)
+                    setAppId(a ? a.id : '')
+                    if (a) setRole(a.role)
+                  }}
+                  aria-label="Prepare for one of my applications (optional)"
+                  style={{ padding: '9px 12px', background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', color: pickedApp ? 'var(--c-text)' : 'var(--c-text-muted)', fontWeight: pickedApp ? 600 : 400, maxWidth: 280, fontSize: 12, outline: 'none', fontFamily: 'var(--font-body)', cursor: 'pointer' }}
                 >
-                  <option value="">From my applications…</option>
-                  {apps.map(a => <option key={a.id} value={a.role}>{a.role} @ {a.company}</option>)}
+                  <option value="">{pickedApp ? 'No application (any role)' : 'From my applications (optional)…'}</option>
+                  {apps.map(a => <option key={a.id} value={a.id}>{a.role} @ {a.company}</option>)}
                 </select>
               )}
             </div>
@@ -665,7 +678,7 @@ export default function InterviewPrepPage() {
             <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--c-violet)' }} />
             <div style={{ textAlign: 'center' }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-text)', marginBottom: 4 }}>Building your interview pack…</p>
-              <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>Generating 15 MCQ questions, 5 written prompts, and 3 LeetCode problems</p>
+              <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>Generating 15 MCQ questions, 5 written prompts, and 3 practice problems</p>
             </div>
           </div>
         ) : !questions ? (

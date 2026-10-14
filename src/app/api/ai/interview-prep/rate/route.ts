@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generate, parseJsonResponse, AI_MODELS, describeAiError } from '@/lib/ai/client'
+import { generateJson, AI_MODELS, describeAiError } from '@/lib/ai/client'
 import { createSupabaseRouteHandlerClient } from '@/lib/supabase-server'
 
 interface Rating {
@@ -32,7 +32,7 @@ INTERVIEW QUESTION: ${question}
 CANDIDATE'S ANSWER:
 ${answer}
 
-Evaluate the answer and return ONLY valid JSON with no markdown fences:
+Evaluate the answer and respond with a single JSON object:
 {
   "score": 7,
   "topic": "React hooks",
@@ -47,13 +47,14 @@ names: "React hooks", "SQL indexing", "System design", "Big-O analysis",
 
 Score guide: 1-3 = incomplete/off-topic, 4-6 = partial understanding, 7-8 = solid with minor gaps, 9-10 = comprehensive and well-articulated.`
 
-    const raw = await generate(prompt, {
+    // JSON mode with a retry; the old 700-token cap could be used up by the
+    // model's reasoning before it wrote the answer.
+    const parsed = await generateJson<Rating>(prompt, {
       model: AI_MODELS.pro,
       temperature: 0.35,
-      maxTokens: 700,
-    })
-
-    const parsed = parseJsonResponse<Rating>(raw)
+      maxTokens: 3000,
+      reasoningEffort: 'low',
+    }, r => (typeof r?.score === 'number' && r.score >= 0 && r.score <= 10 && typeof r?.feedback === 'string' ? null : 'The rating came back incomplete'))
 
     // Persist before responding so streaks and trends have something to read.
     // Best-effort: a storage failure must not cost the user the feedback they

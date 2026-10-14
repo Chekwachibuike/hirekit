@@ -25,7 +25,14 @@ interface GenerateOptions {
   model?: AiModel
   systemPrompt?: string
   temperature?: number
+  /** Includes the model's hidden reasoning tokens (gpt-oss reasons before
+   *  it answers), so a long JSON answer needs headroom beyond its own size. */
   maxTokens?: number
+  /** Groq JSON mode: the reply is guaranteed to be one syntactically valid
+   *  JSON object. The prompt must mention JSON and ask for an object. */
+  json?: boolean
+  /** gpt-oss reasoning budget; 'low' leaves more of maxTokens for the answer. */
+  reasoningEffort?: 'low' | 'medium' | 'high'
 }
 
 export async function generate(
@@ -37,6 +44,8 @@ export async function generate(
     systemPrompt,
     temperature = 0.7,
     maxTokens = 2048,
+    json = false,
+    reasoningEffort,
   } = options
 
   const messages: Groq.Chat.ChatCompletionMessageParam[] = []
@@ -51,9 +60,17 @@ export async function generate(
     messages,
     temperature,
     max_tokens: maxTokens,
+    ...(json ? { response_format: { type: 'json_object' as const } } : {}),
+    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
   })
 
-  return completion.choices[0]?.message?.content ?? ''
+  const choice = completion.choices[0]
+  // Cut off by the token limit: whatever came back is incomplete, and
+  // parsing half a JSON document only produces a confusing syntax error.
+  if (choice?.finish_reason === 'length') {
+    throw new Error('The AI reply was cut off before it finished. Try again.')
+  }
+  return choice?.message?.content ?? ''
 }
 
 /**
@@ -82,8 +99,52 @@ export function describeAiError(err: unknown): string {
   return `AI request failed: ${msg}`
 }
 
-// Parses a JSON block out of an AI response that may wrap it in markdown fences
+/**
+ * Parses the JSON out of an AI reply. Models wrap it in markdown fences or
+ * add a sentence before or after it despite being told not to, so this takes
+ * the span from the first opening bracket to the last closing one.
+ */
 export function parseJsonResponse<T>(raw: string): T {
-  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-  return JSON.parse(cleaned) as T
+  const cleaned = raw.replace(/```(?:json)?\s*/gi, '').trim()
+  try {
+    return JSON.parse(cleaned) as T
+  } catch (first) {
+    const start = cleaned.search(/[[{]/)
+    const end = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']'))
+    if (start >= 0 && end > start) {
+      try { return JSON.parse(cleaned.slice(start, end + 1)) as T } catch { /* fall through */ }
+    }
+    throw first
+  }
+}
+
+/**
+ * generate() + parse, in JSON mode, with one retry. A model occasionally
+ * writes malformed JSON (an unescaped quote inside an answer option was
+ * enough to fail interview prep); a second attempt almost always succeeds,
+ * and costs nothing when the first one was fine.
+ *
+ * check: optional shape test; return an error message to reject the reply.
+ */
+export async function generateJson<T>(
+  prompt: string,
+  options: Omit<GenerateOptions, 'json'> = {},
+  check?: (value: T) => string | null,
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await generate(prompt, { ...options, json: true })
+      const value = parseJsonResponse<T>(raw)
+      const problem = check?.(value)
+      if (problem) throw new Error(problem)
+      return value
+    } catch (err) {
+      lastError = err
+      // Provider problems (bad key, retired model, rate limit) are not fixed
+      // by asking again; only a bad reply is worth a second try.
+      if (/\b(401|404|413|429)\b|rate.?limit|model_not_found|decommissioned|api key/i.test(String(err))) break
+    }
+  }
+  throw lastError
 }

@@ -6,6 +6,7 @@ import Logo from '../Logo'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import UndoToaster from '../UndoToaster'
+import MobileNav from './MobileNav'
 
 // ── Full-screen loader shown during the initial session check ──────────────
 function AppLoader({ stage }: { stage: string }) {
@@ -92,7 +93,7 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
           the corners the two panels below round away. */}
       <div style={{ display: 'flex', flex: 1, paddingTop: 'var(--topbar-h)', background: 'var(--c-chrome-bar)' }}>
         <Sidebar />
-        <main style={{
+        <main className="hk-main" style={{
           marginLeft: 'var(--sidebar-w)',
           flex: 1,
           // A flex item defaults to min-width:auto, so a wide child (the
@@ -110,6 +111,7 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
         }}>
           {children}
         </main>
+        <MobileNav />
       </div>
     </>
   )

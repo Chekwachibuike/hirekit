@@ -68,7 +68,7 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 720 }}>
+    <div style={{ padding: '28px var(--gutter)', maxWidth: 720 }}>
 
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 4 }}>Settings</h1>

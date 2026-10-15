@@ -594,23 +594,23 @@ export default function InterviewPrepPage() {
   ] : []
 
   return (
-    <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: 'var(--page-h)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Header */}
-      <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
+      <div style={{ padding: '22px var(--gutter) 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Interview Prep</h1>
         <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>15 MCQ questions · 5 written prompts with AI scoring · 3 practice problems — for any role, no application needed</p>
       </div>
 
       {/* Progress — streak, this month's scores, and what to study next.
           Sits above the practice itself so the history frames the session. */}
-      <div style={{ padding: '16px 32px 0', flexShrink: 0 }}>
+      <div style={{ padding: '16px var(--gutter) 0', flexShrink: 0 }}>
         <PracticeProgress />
       </div>
 
       {/* Role input */}
-      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+      <div style={{ padding: '16px var(--gutter)', borderBottom: '1px solid var(--c-border)', flexShrink: 0 }}>
+        <div className="hk-wrap" style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
           <div style={{ flex: 1 }}>
             <label htmlFor="ip-role" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--c-text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
               Role you&apos;re preparing for
@@ -686,7 +686,7 @@ export default function InterviewPrepPage() {
         ) : (
           <>
             {/* Tabs */}
-            <div style={{ padding: '0 32px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex' }}>
+            <div style={{ padding: '0 var(--gutter)', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex' }}>
               {tabs.map(({ key, label, icon: Icon, count }) => (
                 <button key={key} onClick={() => setTab(key)} style={{
                   display: 'flex', alignItems: 'center', gap: 7,
@@ -706,7 +706,7 @@ export default function InterviewPrepPage() {
             </div>
 
             {/* Tab panels */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '28px var(--gutter)' }}>
               {tab === 'mcq' && (
                 <MCQSection
                   questions={questions.mcq}

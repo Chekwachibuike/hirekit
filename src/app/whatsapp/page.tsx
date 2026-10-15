@@ -114,7 +114,7 @@ export default function WhatsAppPage() {
   const isConnecting = !isConnected && (polling || hasQr)
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 860 }}>
+    <div style={{ padding: '28px var(--gutter)', maxWidth: 860 }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>

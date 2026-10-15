@@ -66,7 +66,7 @@ export default function Header() {
   const ModeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor
 
   return (
-    <header style={{
+    <header className="hk-header" style={{
       position: 'fixed', top: 0, left: 0, right: 0,
       height: 'var(--topbar-h)',
       // Square and flush. The bar is its own band; the panels BELOW it carry
@@ -95,19 +95,21 @@ export default function Header() {
         <Logo size={34} />
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-chrome-text)', letterSpacing: '-0.03em', lineHeight: 1, fontFamily: 'var(--font-display)' }}>HireKit</div>
-          <div style={{ fontSize: 10, color: 'var(--c-chrome-dim)', letterSpacing: '0.06em', marginTop: 1 }}>JOB SUITE</div>
+          <div className="hk-desktop-only" style={{ fontSize: 10, color: 'var(--c-chrome-dim)', letterSpacing: '0.06em', marginTop: 1 }}>JOB SUITE</div>
         </div>
       </div>
 
-      {/* Theme toggle */}
-      <IconButton label="Toggle color mode" title={`Theme: ${mode}`} onClick={cycle}>
-        <ModeIcon size={15} />
-      </IconButton>
+      {/* Theme toggle (in the More sheet on phones) */}
+      <span className="hk-desktop-only">
+        <IconButton label="Toggle color mode" title={`Theme: ${mode}`} onClick={cycle}>
+          <ModeIcon size={15} />
+        </IconButton>
+      </span>
 
       {/* Notifications */}
       <NotificationBell />
 
-      <div style={{ width: 1, height: 22, background: 'var(--c-chrome-border)', margin: '0 3px' }} />
+      <div className="hk-desktop-only" style={{ width: 1, height: 22, background: 'var(--c-chrome-border)', margin: '0 3px' }} />
 
       {/* Avatar */}
       <div style={{
@@ -120,10 +122,12 @@ export default function Header() {
         {initial}
       </div>
 
-      {/* Sign out */}
-      <IconButton label="Sign out" onClick={signOut}>
-        <LogOut size={15} />
-      </IconButton>
+      {/* Sign out (in the More sheet on phones) */}
+      <span className="hk-desktop-only">
+        <IconButton label="Sign out" onClick={signOut}>
+          <LogOut size={15} />
+        </IconButton>
+      </span>
 
       {/* Window controls — desktop shell only, nothing rendered in a browser */}
       <WindowControls />

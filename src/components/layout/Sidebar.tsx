@@ -22,7 +22,7 @@ interface NavItemDef {
   needs?: Capability
 }
 
-const NAV_MAIN: NavItemDef[] = [
+export const NAV_MAIN: NavItemDef[] = [
   { href: '/dashboard',      label: 'Dashboard',      icon: LayoutDashboard },
   { href: '/personal-info',  label: 'Personal Info',  icon: UserCircle },
   { href: '/applications',   label: 'Applications',   icon: Briefcase },
@@ -31,7 +31,7 @@ const NAV_MAIN: NavItemDef[] = [
   { href: '/projects',       label: 'Projects',       icon: FolderKanban },
 ]
 
-const NAV_AI: NavItemDef[] = [
+export const NAV_AI: NavItemDef[] = [
   { href: '/interview-prep', label: 'Interview Prep', icon: BrainCircuit },
   { href: '/skills',         label: 'Skills Audit',   icon: ClipboardCheck },
   { href: '/job-search',     label: 'Job Search',     icon: Search },
@@ -145,7 +145,7 @@ export default function Sidebar() {
   const available = (item: NavItemDef) => !item.needs || caps?.[item.needs] === true
 
   return (
-    <aside style={{
+    <aside className="hk-sidebar" style={{
       position: 'fixed', left: 0, top: 'var(--topbar-h)', bottom: 0,
       width: 'var(--sidebar-w)',
       background: 'var(--c-chrome)',

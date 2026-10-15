@@ -319,3 +319,130 @@ button:disabled { cursor: not-allowed !important; }
 /* ── Dashboard split ──────────────────────────────────── */
 .dash-split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; }
 @media (max-width: 1100px) { .dash-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* ═══════════════════════════════════════════════════════
+   PHONES  (≤ 860px)
+   The sidebar gives way to a bottom tab bar + More sheet
+   (components/layout/MobileNav.tsx); two-pane pages stack.
+   ═══════════════════════════════════════════════════════ */
+:root { --gutter: 32px; --tabbar-h: 0px; --page-h: calc(100vh - var(--topbar-h)); }
+@supports (height: 100dvh) { :root { --page-h: calc(100dvh - var(--topbar-h)); } }
+
+/* Tab bar and sheet exist only on phones */
+.hk-tabbar { display: none; }
+
+@media (max-width: 860px) {
+  :root {
+    --gutter: 16px;
+    --topbar-h: 56px;
+    --sidebar-w: 0px;
+    --tabbar-h: 56px;
+    --page-h: calc(100dvh - var(--topbar-h) - var(--tabbar-h) - env(safe-area-inset-bottom));
+  }
+  .hk-sidebar, .hk-desktop-only, .hk-hide-mobile { display: none !important; }
+  .hk-header { padding: 0 12px 0 calc(12px + env(safe-area-inset-left)) !important; }
+  .hk-main {
+    border-top-right-radius: 0 !important;
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  }
+
+  /* 16px or more stops iOS zooming the page when a field is focused */
+  input, select, textarea { font-size: 16px !important; }
+  .hk-main h1 { font-size: 21px !important; line-height: 1.2; }
+  /* Title rows and toolbars wrap instead of squeezing */
+  .hk-main [style*="justify-content: space-between"] { flex-wrap: wrap; row-gap: 10px; }
+
+  /* Two-pane pages: side pane on top, capped, main pane below */
+  .hk-stack { flex-direction: column !important; }
+  .hk-pane-side {
+    width: 100% !important; max-height: 38%; flex-shrink: 0;
+    border-left: 0 !important; border-right: 0 !important;
+    border-bottom: 1px solid var(--c-border);
+  }
+  .hk-pane-last { order: -1; }
+  .hk-cal-side { max-height: none; flex-direction: row !important; flex-wrap: wrap; align-items: center; padding: 10px 16px !important; gap: 10px !important; }
+  .hk-cal-side > :not(button) { display: none; }
+  /* Job details: a full-screen sheet over the results */
+  .hk-pane-overlay {
+    position: fixed !important; inset: var(--topbar-h) 0 0 0; width: auto !important;
+    z-index: 150; border-left: 0 !important;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+    animation: fadeUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* Dialogs never wider or taller than the screen */
+  [role="dialog"]:not(.hk-sheet) { max-width: calc(100vw - 24px) !important; max-height: calc(100dvh - 40px) !important; overflow-y: auto; }
+
+  /* ── Tab bar: a translucent material content scrolls under ── */
+  .hk-tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 120;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: color-mix(in srgb, var(--c-chrome-bar) 80%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid var(--c-chrome-border);
+  }
+  .hk-tab {
+    flex: 1; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    background: none; border: none; text-decoration: none; cursor: pointer;
+    color: var(--c-chrome-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .hk-tab[data-on] { color: var(--c-violet); }
+
+  /* ── More sheet ── */
+  .hk-sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; max-height: 88dvh; overflow-y: auto;
+    background: var(--c-bg-2); border-radius: 20px 20px 0 0; box-shadow: var(--shadow-xl);
+    padding-bottom: calc(16px + env(safe-area-inset-bottom)); outline: none;
+    transform: translateY(100%);
+  }
+  .hk-sheet-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    min-height: 76px; padding: 10px 6px; border-radius: var(--r-md); text-align: center;
+    background: var(--c-bg-3); border: 1px solid var(--c-border);
+    color: var(--c-text); text-decoration: none; font-size: 12px; font-weight: 600; line-height: 1.2;
+  }
+  .hk-sheet-item[data-on] { color: var(--c-violet); border-color: var(--c-border-hot); background: var(--c-violet-dim); }
+  .hk-sheet-row {
+    display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 10px;
+    background: none; border: none; border-radius: var(--r-md); text-decoration: none; cursor: pointer;
+    color: var(--c-text); font-size: 15px; font-weight: 500; text-align: left;
+  }
+}
+
+@media (max-width: 860px) and (prefers-reduced-transparency: reduce) {
+  .hk-tabbar { background: var(--c-chrome-bar); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@media (max-width: 860px) {
+  .hk-dash { padding: 20px var(--gutter) 32px !important; }
+  /* Job search: keywords and location get a full row each; the selects and
+     buttons share the rows below. */
+  .hk-searchbar > :nth-child(1), .hk-searchbar > :nth-child(2) { flex: 1 1 100% !important; min-width: 0 !important; }
+  .hk-searchbar > button { flex: 1 1 auto; justify-content: center; }
+  /* Toolbars too wide for a phone scroll sideways instead of wrapping words */
+  .hk-scroll-x { overflow-x: auto; flex-wrap: nowrap !important; max-width: 100%; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .hk-scroll-x::-webkit-scrollbar { display: none; }
+  .hk-scroll-x > * { flex-shrink: 0; white-space: nowrap; }
+  .hk-wrap { flex-wrap: wrap !important; }
+  .hk-wrap > * { min-width: 0; }
+  .hk-wrap > div:first-child { flex: 1 1 100% !important; }
+  .hk-wrap > div:first-child > div { flex-wrap: wrap; }
+  .hk-wrap > div:first-child > div > * { flex: 1 1 100% !important; max-width: none !important; }
+}
+@media (max-width: 860px) { .hk-wrap > button { flex: 1 1 100%; justify-content: center; } }
+@media (max-width: 860px) {
+  /* Button groups inside title rows wrap too (Projects, Applications,
+     Calendar), so no single row can widen the page past the screen. */
+  .hk-main [style*="justify-content: space-between"] > [style*="display: flex"] { flex-wrap: wrap; row-gap: 8px; min-width: 0; }
+  .hk-main [style*="justify-content: space-between"] > * { min-width: 0; max-width: 100%; }
+  /* The kanban scrolls a column at a time */
+  .hk-main [style*="overflow-x: auto"] { scroll-snap-type: x proximity; }
+  .hk-main [style*="overflow-x: auto"] > * { scroll-snap-align: start; }
+}
+@media (max-width: 860px) {
+  /* Job details keep the close button beside the title, however long it is */
+  .hk-pane-overlay > [style*="justify-content: space-between"] { flex-wrap: nowrap; }
+  .hk-pane-overlay > [style*="justify-content: space-between"] > :first-child { flex: 1 1 auto; }
+}

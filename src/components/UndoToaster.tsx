@@ -21,11 +21,11 @@ export default function UndoToaster() {
   if (!items.length) return null
   return (
     <div role="status" aria-live="polite"
-      style={{ position: 'fixed', left: 'calc(var(--sidebar-w) + 20px)', bottom: 20, zIndex: 400, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      style={{ position: 'fixed', left: 'calc(var(--sidebar-w) + 16px)', right: 16, bottom: 'calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px)', zIndex: 400, pointerEvents: 'none', alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: 8 }}>
       {items.slice(-3).map(t => (
         <div key={t.id} className="fade-up" style={{
           position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 12,
-          padding: '10px 10px 10px 14px', minWidth: 300, maxWidth: 420,
+          padding: '10px 10px 10px 14px', minWidth: 'min(300px, 100%)', maxWidth: 420, pointerEvents: 'auto',
           background: 'var(--c-text)', color: 'var(--c-bg-2)', borderRadius: 'var(--r-md)',
           boxShadow: 'var(--shadow-lg)', fontSize: 13,
         }}>

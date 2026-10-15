@@ -159,7 +159,7 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div style={{ padding: '34px 40px 48px', maxWidth: 1080, margin: '0 auto', animation: 'fadeUp 0.4s ease forwards' }}>
+    <div className="hk-dash" style={{ padding: '34px 40px 48px', maxWidth: 1080, margin: '0 auto', animation: 'fadeUp 0.4s ease forwards' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
@@ -193,7 +193,7 @@ export default function DashboardPage() {
 
       {/* Stats grid */}
       {/* auto-fit: four across on a laptop, two or one when the window is narrow */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 20 }}>
         {STAT_CARDS.map((s, i) => (
           <StatCard key={s.label} {...s} loading={loading} delay={i * 0.05} />
         ))}

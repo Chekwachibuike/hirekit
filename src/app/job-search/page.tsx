@@ -414,10 +414,10 @@ export default function JobSearchPage() {
   const detailOnBoard = detail ? tracked.find(detail) : undefined
 
   return (
-    <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: 'var(--page-h)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Header */}
-      <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ padding: '22px var(--gutter) 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Job Search</h1>
           <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>LinkedIn, remote and Nigerian job boards, and the hiring pages of tech, energy and engineering employers — filtered for who can apply, checked for scams</p>
@@ -452,7 +452,7 @@ export default function JobSearchPage() {
       )}
 
       {/* Search bar */}
-      <div style={{ padding: '14px 32px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div className="hk-searchbar" style={{ padding: '14px var(--gutter)', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--c-bg-2)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', padding: '0 12px', flex: 2, minWidth: 200 }}>
           <Search size={14} color="var(--c-text-muted)" />
           <input
@@ -580,7 +580,7 @@ export default function JobSearchPage() {
       {/* Which boards answered, and how many survived the eligibility filter */}
       {searched && sourceOutcomes.length > 0 && (
         <div style={{
-          margin: '10px 32px 0', display: 'flex', alignItems: 'center', gap: 10,
+          margin: '10px var(--gutter) 0', display: 'flex', alignItems: 'center', gap: 10,
           flexWrap: 'wrap', fontSize: 11, color: 'var(--c-text-dim)', flexShrink: 0,
         }}>
           {sourceOutcomes.map(o => (
@@ -621,7 +621,7 @@ export default function JobSearchPage() {
       )}
 
       {alertNote && (
-        <div role="status" style={{ margin: '12px 32px 0', fontSize: 12, color: 'var(--c-teal)', background: 'var(--c-teal-dim)', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+        <div role="status" style={{ margin: '12px var(--gutter) 0', fontSize: 12, color: 'var(--c-teal)', background: 'var(--c-teal-dim)', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
           <span>{alertNote}</span>
           <button aria-label="Dismiss" onClick={() => setAlertNote(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>
         </div>
@@ -629,7 +629,7 @@ export default function JobSearchPage() {
 
       {/* A form problem is shown live, ahead of any earlier server error. */}
       {(formError || error) && (
-        <div role="alert" style={{ margin: '12px 32px 0', fontSize: 12, color: 'var(--c-danger-text)', background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0 }}>
+        <div role="alert" style={{ margin: '12px var(--gutter) 0', fontSize: 12, color: 'var(--c-danger-text)', background: 'var(--c-danger-bg)', border: '1px solid var(--c-danger-border)', borderRadius: 'var(--r-md)', padding: '8px 12px', flexShrink: 0 }}>
           {formError ?? error}
         </div>
       )}
@@ -781,7 +781,7 @@ export default function JobSearchPage() {
 
         {/* Detail panel */}
         {detail && (
-          <div style={{ width: 440, flexShrink: 0, borderLeft: '1px solid var(--c-border)', overflowY: 'auto', padding: '22px 26px', background: 'var(--c-bg-3)' }}>
+          <div className="hk-pane-overlay" style={{ width: 440, flexShrink: 0, borderLeft: '1px solid var(--c-border)', overflowY: 'auto', padding: '22px 26px', background: 'var(--c-bg-3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 4 }}>
               <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--c-text)', lineHeight: 1.35 }}>{detail.title}</h2>
               <button aria-label="Close details" onClick={() => setDetail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-muted)', padding: 4, flexShrink: 0 }}>

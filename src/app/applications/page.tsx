@@ -163,11 +163,11 @@ export default function ApplicationsPage() {
   const offers = apps.filter(a => a.status === 'offer').length
 
   return (
-    <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: 'var(--page-h)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* ── Top bar ── */}
       <div style={{
-        padding: '22px 32px 18px',
+        padding: '22px var(--gutter) 18px',
         borderBottom: '1px solid var(--c-border)',
         background: 'var(--c-bg)',
         flexShrink: 0,

@@ -616,10 +616,10 @@ export default function CVBuilderPage() {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', overflow: 'hidden' }}>
+    <div className="hk-stack" style={{ height: 'var(--page-h)', display: 'flex', overflow: 'hidden' }}>
 
       {/* ── Left: Versions sidebar ── */}
-      <div style={{
+      <div className="hk-pane-side" style={{
         width: 260, flexShrink: 0,
         borderRight: '1px solid var(--c-border)',
         display: 'flex', flexDirection: 'column',
@@ -726,7 +726,7 @@ export default function CVBuilderPage() {
             <TabBtn active={tab === 'preview'} icon={Eye}   label="Preview" onClick={() => setTab('preview')} />
           </div>
 
-          <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+          <div className="hk-scroll-x" style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
             <GhostBtn icon={copied ? Check : Copy} label={copied ? 'Copied!' : 'Copy'} active={copied} onClick={copy} />
             {/* Primary export: browser-print → real selectable text that ATS can parse. */}
             <GhostBtn icon={Download} label="Download PDF" primary active={false} onClick={downloadAtsPdf}
@@ -835,7 +835,7 @@ export default function CVBuilderPage() {
               }}
             />
           ) : (
-            <div style={{ height: '100%', overflowY: 'auto', padding: '32px 24px', background: 'var(--c-bg)' }}>
+            <div style={{ height: '100%', overflowY: 'auto', padding: 'var(--gutter) 24px', background: 'var(--c-bg)' }}>
               <CVPreview markdown={markdown} />
             </div>
           )}

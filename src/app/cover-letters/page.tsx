@@ -164,10 +164,10 @@ export default function CoverLettersPage() {
     (mode === 'freeform' || template.trim())
 
   return (
-    <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: 'var(--page-h)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Top bar */}
-      <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '22px var(--gutter) 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Cover Letters</h1>
           <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>AI-generated letters — free-form or from your own template</p>
@@ -178,10 +178,10 @@ export default function CoverLettersPage() {
       </div>
 
       {/* Split layout */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="hk-stack" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* Letter list */}
-        <div style={{ width: 300, flexShrink: 0, borderRight: '1px solid var(--c-border)', overflowY: 'auto', padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <div className="hk-pane-side" style={{ width: 300, flexShrink: 0, borderRight: '1px solid var(--c-border)', overflowY: 'auto', padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
           {lettersLoading && (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0', color: 'var(--c-text-muted)' }}>
               <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />

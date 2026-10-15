@@ -233,7 +233,7 @@ export default function PersonalInfoPage() {
   }
 
   return (
-    <div style={{ maxWidth: 760, padding: '28px 32px 60px' }}>
+    <div style={{ maxWidth: 760, padding: '28px var(--gutter) 60px' }}>
 
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -273,7 +273,7 @@ export default function PersonalInfoPage() {
           style={{
             border: `2px dashed ${isDragActive ? 'var(--c-violet)' : 'var(--c-border)'}`,
             borderRadius: 'var(--r-lg)',
-            padding: '32px 20px',
+            padding: 'var(--gutter) 20px',
             textAlign: 'center',
             cursor: uploading ? 'not-allowed' : 'pointer',
             background: isDragActive ? 'var(--c-violet-dim)' : 'var(--c-bg-3)',

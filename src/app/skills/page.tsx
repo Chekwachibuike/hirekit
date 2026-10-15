@@ -119,10 +119,10 @@ export default function SkillsPage() {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - var(--topbar-h))', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: 'var(--page-h)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Header */}
-      <div style={{ padding: '22px 32px 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ padding: '22px var(--gutter) 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text)', letterSpacing: '-0.02em', marginBottom: 3 }}>Skills Audit</h1>
           <p style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>
@@ -139,7 +139,7 @@ export default function SkillsPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="hk-stack" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* ── Left: checklist ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px', minWidth: 0 }}>
@@ -249,7 +249,7 @@ export default function SkillsPage() {
         </div>
 
         {/* ── Right: role readiness ── */}
-        <div style={{ width: 340, flexShrink: 0, borderLeft: '1px solid var(--c-border)', overflowY: 'auto', padding: '20px 22px', background: 'var(--c-bg-3)' }}>
+        <div className="hk-pane-side hk-pane-last" style={{ width: 340, flexShrink: 0, borderLeft: '1px solid var(--c-border)', overflowY: 'auto', padding: '20px 22px', background: 'var(--c-bg-3)' }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-text-dim)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Target size={12} /> Role readiness
           </p>

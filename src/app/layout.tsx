@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { DM_Sans, JetBrains_Mono, Space_Grotesk } from 'next/font/google'
 import '../styles/tokens.css'
 import ShellWrapper from '../components/layout/ShellWrapper'
@@ -27,6 +27,10 @@ const spaceGrotesk = Space_Grotesk({
   variable: '--font-space',
   display: 'swap',
 })
+
+// viewport-fit=cover exposes env(safe-area-inset-*) so the phone tab bar
+// can sit clear of the home indicator.
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' }
 
 export const metadata: Metadata = {
   title: 'HireKit — Job Application Suite',

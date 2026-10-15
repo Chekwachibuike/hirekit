@@ -17,6 +17,9 @@ export default function AuthPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [info, setInfo]         = useState<string | null>(null)
+  // Address awaiting confirmation, so the link can be re-sent.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null)
+  const [resent, setResent]     = useState<'idle' | 'sending' | 'sent'>('idle')
 
   // Redirect if already logged in
   useEffect(() => {
@@ -36,12 +39,30 @@ export default function AuthPage() {
 
     try {
       if (mode === 'signup') {
-        const { error: signUpErr } = await supabase.auth.signUp({
+        const { data, error: signUpErr } = await supabase.auth.signUp({
           email, password,
-          options: { data: { full_name: name } },
+          options: { data: { full_name: name }, emailRedirectTo: `${window.location.origin}/auth` },
         })
         if (signUpErr) throw signUpErr
-        setInfo('Check your email for a confirmation link, then sign in.')
+        // Say what actually happened, not what usually happens. With email
+        // confirmation off in Supabase (this project), signUp signs the user
+        // straight in and no email is ever sent; telling them to wait for a
+        // link sent them looking for a message that does not exist.
+        if (data.session) {
+          router.replace('/dashboard')
+          return
+        }
+        // Confirmation on, and the address already has an account: Supabase
+        // returns a user with no identities instead of an error, so it does
+        // not reveal which emails are registered.
+        if (data.user && (data.user.identities ?? []).length === 0) {
+          setError('An account with this email already exists. Sign in instead.')
+          setMode('signin')
+          return
+        }
+        setInfo(`We sent a confirmation link to ${email}. Open it, then sign in here. Not there after a few minutes? Check spam.`)
+        setPendingEmail(email)
+        setResent('idle')
         setMode('signin')
       } else {
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
@@ -68,8 +89,8 @@ export default function AuthPage() {
       fontFamily: 'var(--font-body)',
     }}>
 
-      {/* ── Left panel — branding ── */}
-      <div style={{
+      {/* ── Left panel — branding (hidden on phones: the form is the point) ── */}
+      <div className="hk-hide-mobile" style={{
         width: '45%', flexShrink: 0,
         background: 'linear-gradient(145deg, #1a0a3c 0%, #2d1060 40%, #1a0a3c 100%)',
         display: 'flex', flexDirection: 'column',
@@ -206,6 +227,17 @@ export default function AuthPage() {
             {info && (
               <div style={{ background: 'rgba(0,168,133,0.08)', border: '1px solid rgba(0,168,133,0.25)', color: 'var(--c-teal)', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 13 }}>
                 {info}
+                {pendingEmail && (
+                  <button type="button" disabled={resent !== 'idle'}
+                    onClick={async () => {
+                      setResent('sending')
+                      const { error: e } = await createSupabaseBrowserClient().auth.resend({ type: 'signup', email: pendingEmail })
+                      if (e) { setError(e.message); setResent('idle') } else setResent('sent')
+                    }}
+                    style={{ display: 'block', marginTop: 8, background: 'none', border: 'none', padding: 0, color: 'inherit', fontWeight: 700, fontSize: 13, textDecoration: 'underline', cursor: resent === 'idle' ? 'pointer' : 'default' }}>
+                    {resent === 'sent' ? 'Sent again' : resent === 'sending' ? 'Sending…' : 'Resend email'}
+                  </button>
+                )}
               </div>
             )}
 

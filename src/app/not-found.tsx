@@ -3,7 +3,7 @@ import Link from 'next/link'
 export default function NotFound() {
   return (
     <div style={{
-      minHeight: 'calc(100vh - var(--topbar-h))',
+      minHeight: 'var(--page-h)',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       background: 'var(--c-bg)',

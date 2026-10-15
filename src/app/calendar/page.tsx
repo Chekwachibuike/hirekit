@@ -520,10 +520,10 @@ export default function CalendarPage() {
   [allEvents, todayISO])
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - var(--topbar-h))', overflow: 'hidden', background: 'var(--c-bg)' }}>
+    <div className="hk-stack" style={{ display: 'flex', height: 'var(--page-h)', overflow: 'hidden', background: 'var(--c-bg)' }}>
 
       {/* ── Left panel ── */}
-      <aside style={{
+      <aside className="hk-pane-side hk-cal-side" style={{
         width: 240, flexShrink: 0, borderRight: '1px solid var(--c-border)',
         background: 'var(--c-bg-2)', display: 'flex', flexDirection: 'column',
         padding: '18px 14px', gap: 18, overflowY: 'auto',
@@ -540,9 +540,11 @@ export default function CalendarPage() {
           <Plus size={15} /> New Event
         </button>
 
-        {/* Mini calendar */}
-        <MiniMonth year={miniYear} month={miniMonth} selected={miniSel}
-          onSelect={pickMini} onNav={navMini} />
+        {/* Mini calendar (the main grid is the month on phones) */}
+        <div className="hk-hide-mobile">
+          <MiniMonth year={miniYear} month={miniMonth} selected={miniSel}
+            onSelect={pickMini} onNav={navMini} />
+        </div>
 
         <div style={{ height: 1, background: 'var(--c-border)' }} />
 

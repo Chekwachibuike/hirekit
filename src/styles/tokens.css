@@ -446,3 +446,11 @@ button:disabled { cursor: not-allowed !important; }
   .hk-pane-overlay > [style*="justify-content: space-between"] { flex-wrap: nowrap; }
   .hk-pane-overlay > [style*="justify-content: space-between"] > :first-child { flex: 1 1 auto; }
 }
+@media (max-width: 860px) {
+  /* Pages with a tall form above a list (Job Search) scroll as one column on
+     phones, instead of squeezing the list into a strip under the form. */
+  .hk-flow, .hk-flow-body, .hk-flow-results { height: auto !important; overflow: visible !important; }
+  .hk-flow-results { padding: 16px var(--gutter) !important; min-height: 55dvh; display: flex; flex-direction: column; scroll-margin-top: var(--topbar-h); }
+  .hk-flow-results > * { flex: 0 0 auto; }
+  .hk-flow-results > [style*="height: 100%"] { flex: 1 1 auto; height: auto !important; }
+}

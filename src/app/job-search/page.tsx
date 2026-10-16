@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePersistentState } from '@/lib/usePersistentState'
 import { requestCvTailor, MIN_DESCRIPTION_CHARS } from '@/lib/cv-tailor-handoff'
@@ -157,6 +157,7 @@ export default function JobSearchPage() {
   const [results, setResults]   = usePersistentState<JobCard[]>('jobSearch.results', [])
   const [page, setPage]         = usePersistentState('jobSearch.page', 1)
   const [searching, setSearching] = usePersistentState('jobSearch.searching', false, { session: false })
+  const resultsRef = useRef<HTMLDivElement>(null)
   const [loadingMore, setLoadingMore] = usePersistentState('jobSearch.loadingMore', false, { session: false })
   const [searched, setSearched] = usePersistentState('jobSearch.searched', false)
   const [error, setError]       = usePersistentState<string | null>('jobSearch.error', null)
@@ -241,6 +242,12 @@ export default function JobSearchPage() {
     setError(null)
     setDetail(null)
     setPage(1)
+    // On a phone the form fills most of the screen: drop the keyboard and
+    // bring the results up instead of leaving them below the fold.
+    if (window.matchMedia('(max-width: 860px)').matches) {
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
     try {
       const res  = await fetch(`/api/job-search?${buildParams(1)}`)
       const json = await res.json()
@@ -414,7 +421,7 @@ export default function JobSearchPage() {
   const detailOnBoard = detail ? tracked.find(detail) : undefined
 
   return (
-    <div style={{ height: 'var(--page-h)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="hk-flow" style={{ height: 'var(--page-h)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Header */}
       <div style={{ padding: '22px var(--gutter) 16px', borderBottom: '1px solid var(--c-border)', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
@@ -635,10 +642,10 @@ export default function JobSearchPage() {
       )}
 
       {/* Body: results list + detail panel */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="hk-flow-body" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* Results */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 24px', minWidth: 0 }}>
+        <div ref={resultsRef} className="hk-flow-results" style={{ flex: 1, overflowY: 'auto', padding: '18px 24px', minWidth: 0 }}>
           {searching ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--c-text-muted)' }}>
               <Loader2 size={26} style={{ animation: 'spin 1s linear infinite', color: 'var(--c-violet)' }} />
